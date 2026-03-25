@@ -6,7 +6,7 @@ import { Download, Award, QrCode } from "lucide-react";
 const Certificate = () => {
   const { currentRequest } = useApp();
 
-  if (!currentRequest || currentRequest.status !== "issued") {
+  if (!currentRequest || currentRequest.status !== "published") {
     return (
       <div className="container py-16 text-center text-muted-foreground">
         لم يتم إصدار شهادة بعد
@@ -41,9 +41,14 @@ const Certificate = () => {
               <p className="text-muted-foreground text-sm">تاريخ الإصدار</p>
               <p className="font-medium">{new Date().toLocaleDateString("ar-EG")}</p>
             </div>
+            {currentRequest.needsRatification && (
+              <div>
+                <p className="text-muted-foreground text-sm">حالة التصديق</p>
+                <p className="font-medium text-success">تم التصديق من مصلحة الشركات</p>
+              </div>
+            )}
           </div>
 
-          {/* Mock QR */}
           <div className="flex justify-center">
             <div className="w-32 h-32 bg-muted rounded-lg flex items-center justify-center border-2 border-dashed border-border">
               <QrCode className="w-16 h-16 text-muted-foreground" />

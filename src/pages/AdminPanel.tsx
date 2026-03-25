@@ -3,19 +3,25 @@ import { useApp } from "@/context/AppContext";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Check, X, FileQuestion, Loader2 } from "lucide-react";
+import { Check, X, FileQuestion, Loader2, Landmark, Award } from "lucide-react";
 
 const statusLabels: Record<string, string> = {
-  submitted: "تم التقديم",
-  under_review: "قيد المراجعة",
+  selected: "تم الاختيار",
+  identity_check: "التحقق من الهوية",
+  eligibility_check: "فحص الأهلية",
+  document_retrieval: "استرجاع المستندات",
+  compliance_review: "مراجعة الامتثال",
+  pending_decision: "في انتظار القرار",
   approved: "تمت الموافقة",
   payment_pending: "في انتظار السداد",
-  issued: "تم الإصدار",
+  payment_check: "التحقق من السداد",
+  ratification: "التصديق",
+  published: "تم الإصدار",
   rejected: "مرفوض",
 };
 
 const AdminPanel = () => {
-  const { requests, approveRequest, rejectRequest, requestDocuments } = useApp();
+  const { requests, approveRequest, rejectRequest, requestDocuments, advanceToRatification, publishRequest } = useApp();
   const [loadingId, setLoadingId] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
@@ -40,7 +46,6 @@ const AdminPanel = () => {
         </Card>
       ) : (
         <div className="grid md:grid-cols-3 gap-6">
-          {/* Request list */}
           <div className="space-y-3">
             {requests.map(r => (
               <Card
@@ -59,7 +64,6 @@ const AdminPanel = () => {
             ))}
           </div>
 
-          {/* Detail panel */}
           <div className="md:col-span-2">
             {selected ? (
               <Card>
@@ -86,7 +90,8 @@ const AdminPanel = () => {
                     </div>
                   </div>
 
-                  {(selected.status === "submitted" || selected.status === "under_review") && (
+                  {/* Decision actions - for pending_decision */}
+                  {selected.status === "pending_decision" && (
                     <div className="flex gap-3 pt-4 border-t">
                       <Button
                         onClick={() => handleAction(selected.id, () => approveRequest(selected.id))}
@@ -94,7 +99,7 @@ const AdminPanel = () => {
                         className="gap-1.5"
                       >
                         {loadingId === selected.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
-                        موافقة
+                        موافقة (APPROVED)
                       </Button>
                       <Button
                         variant="destructive"
@@ -102,7 +107,7 @@ const AdminPanel = () => {
                         disabled={loadingId === selected.id}
                         className="gap-1.5"
                       >
-                        <X className="w-4 h-4" /> رفض
+                        <X className="w-4 h-4" /> رفض (REJECTED)
                       </Button>
                       <Button
                         variant="outline"
@@ -111,6 +116,56 @@ const AdminPanel = () => {
                         className="gap-1.5"
                       >
                         <FileQuestion className="w-4 h-4" /> طلب مستندات
+                      </Button>
+                    </div>
+                  )}
+
+                  {/* Compliance review actions */}
+                  {selected.status === "compliance_review" && (
+                    <div className="flex gap-3 pt-4 border-t">
+                      <Button
+                        variant="outline"
+                        onClick={() => handleAction(selected.id, () => requestDocuments(selected.id, ["شهادة ضريبية", "كشف حساب بنكي"]))}
+                        disabled={loadingId === selected.id}
+                        className="gap-1.5"
+                      >
+                        <FileQuestion className="w-4 h-4" /> طلب مستندات إضافية
+                      </Button>
+                    </div>
+                  )}
+
+                  {/* Payment check → decide ratification or publish */}
+                  {selected.status === "payment_check" && (
+                    <div className="flex gap-3 pt-4 border-t">
+                      <Button
+                        onClick={() => handleAction(selected.id, () => advanceToRatification(selected.id))}
+                        disabled={loadingId === selected.id}
+                        className="gap-1.5"
+                      >
+                        {loadingId === selected.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Landmark className="w-4 h-4" />}
+                        يحتاج تصديق
+                      </Button>
+                      <Button
+                        variant="secondary"
+                        onClick={() => handleAction(selected.id, () => publishRequest(selected.id))}
+                        disabled={loadingId === selected.id}
+                        className="gap-1.5"
+                      >
+                        <Award className="w-4 h-4" /> نشر مباشر (بدون تصديق)
+                      </Button>
+                    </div>
+                  )}
+
+                  {/* Ratification → publish */}
+                  {selected.status === "ratification" && (
+                    <div className="flex gap-3 pt-4 border-t">
+                      <Button
+                        onClick={() => handleAction(selected.id, () => publishRequest(selected.id))}
+                        disabled={loadingId === selected.id}
+                        className="gap-1.5"
+                      >
+                        {loadingId === selected.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Award className="w-4 h-4" />}
+                        تم التصديق - نشر الشهادة
                       </Button>
                     </div>
                   )}

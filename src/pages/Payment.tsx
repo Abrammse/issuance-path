@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { useApp } from "@/context/AppContext";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { CreditCard, Loader2, CheckCircle2, XCircle } from "lucide-react";
+import { CreditCard, Loader2, CheckCircle2, XCircle, Search } from "lucide-react";
 
 const Payment = () => {
   const navigate = useNavigate();
@@ -26,7 +26,7 @@ const Payment = () => {
     setResult(success ? "success" : "failure");
     setLoading(false);
     if (success) {
-      setTimeout(() => navigate("/certificate"), 1500);
+      setTimeout(() => navigate("/dashboard"), 2000);
     }
   };
 
@@ -51,9 +51,15 @@ const Payment = () => {
           </div>
 
           {result === "success" ? (
-            <div className="flex items-center gap-3 p-4 rounded-lg bg-success/10 text-success">
-              <CheckCircle2 className="w-6 h-6" />
-              <span className="font-medium">تم السداد بنجاح! جاري التحويل...</span>
+            <div className="space-y-3">
+              <div className="flex items-center gap-3 p-4 rounded-lg bg-success/10 text-success">
+                <CheckCircle2 className="w-6 h-6" />
+                <span className="font-medium">تم السداد بنجاح!</span>
+              </div>
+              <div className="flex items-center gap-3 p-4 rounded-lg bg-primary/10 text-primary">
+                <Search className="w-6 h-6" />
+                <span className="font-medium text-sm">جاري التحقق من السداد... سيتم التحويل للوحة التحكم</span>
+              </div>
             </div>
           ) : result === "failure" ? (
             <div className="space-y-3">
