@@ -7,20 +7,32 @@ import StatusTimeline from "@/components/StatusTimeline";
 import { FileText, AlertTriangle } from "lucide-react";
 
 const statusLabels: Record<string, string> = {
-  submitted: "تم التقديم",
-  under_review: "قيد المراجعة",
+  selected: "تم الاختيار",
+  identity_check: "التحقق من الهوية",
+  eligibility_check: "فحص الأهلية",
+  document_retrieval: "استرجاع المستندات",
+  compliance_review: "مراجعة الامتثال",
+  pending_decision: "في انتظار القرار",
   approved: "تمت الموافقة",
   payment_pending: "في انتظار السداد",
-  issued: "تم الإصدار",
+  payment_check: "التحقق من السداد",
+  ratification: "التصديق",
+  published: "تم الإصدار",
   rejected: "مرفوض",
 };
 
 const statusVariants: Record<string, "default" | "secondary" | "destructive" | "outline"> = {
-  submitted: "secondary",
-  under_review: "outline",
+  selected: "secondary",
+  identity_check: "outline",
+  eligibility_check: "outline",
+  document_retrieval: "outline",
+  compliance_review: "outline",
+  pending_decision: "outline",
   approved: "default",
   payment_pending: "outline",
-  issued: "default",
+  payment_check: "outline",
+  ratification: "outline",
+  published: "default",
   rejected: "destructive",
 };
 
@@ -41,10 +53,9 @@ const Dashboard = () => {
   const req = currentRequest ?? requests[requests.length - 1];
 
   return (
-    <div className="container py-10 max-w-3xl">
+    <div className="container py-10 max-w-4xl">
       <h1 className="text-2xl font-bold mb-8">لوحة التحكم</h1>
 
-      {/* Request list */}
       {requests.length > 1 && (
         <div className="flex gap-2 mb-6 flex-wrap">
           {requests.map(r => (
@@ -64,7 +75,7 @@ const Dashboard = () => {
       <Card className="mb-6">
         <CardHeader className="flex-row items-center justify-between">
           <CardTitle className="text-lg">الطلب {req.id}</CardTitle>
-          <Badge variant={statusVariants[req.status]}>{statusLabels[req.status]}</Badge>
+          <Badge variant={statusVariants[req.status] ?? "secondary"}>{statusLabels[req.status]}</Badge>
         </CardHeader>
         <CardContent>
           <StatusTimeline status={req.status} />
@@ -97,7 +108,7 @@ const Dashboard = () => {
         {req.status === "payment_pending" && (
           <Button asChild><Link to="/payment">الذهاب للسداد</Link></Button>
         )}
-        {req.status === "issued" && (
+        {req.status === "published" && (
           <Button asChild><Link to="/certificate">عرض الشهادة</Link></Button>
         )}
       </div>
