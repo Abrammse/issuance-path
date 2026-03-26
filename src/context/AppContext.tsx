@@ -79,7 +79,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     });
   };
 
-  const submitRequest = useCallback((data: Omit<ServiceRequest, "id" | "status" | "createdAt" | "missingDocs" | "certificateNumber" | "notifications" | "paid" | "needsRatification">) => {
+  const submitRequest = useCallback((data: Omit<ServiceRequest, "id" | "status" | "createdAt" | "missingDocs" | "certificateNumber" | "notifications" | "paid" | "needsRatification" | "selectedCompany">) => {
     const req: ServiceRequest = {
       ...data,
       id: `REQ-${Date.now().toString(36).toUpperCase()}`,
