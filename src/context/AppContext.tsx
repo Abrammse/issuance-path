@@ -43,7 +43,7 @@ export interface ServiceRequest {
 interface AppContextType {
   requests: ServiceRequest[];
   currentRequest: ServiceRequest | null;
-  submitRequest: (data: Omit<ServiceRequest, "id" | "status" | "createdAt" | "missingDocs" | "certificateNumber" | "notifications" | "paid" | "needsRatification">) => void;
+  submitRequest: (data: Omit<ServiceRequest, "id" | "status" | "createdAt" | "missingDocs" | "certificateNumber" | "notifications" | "paid" | "needsRatification" | "selectedCompany">) => void;
   advanceToIdentity: (id: string) => void;
   advanceToEligibility: (id: string) => void;
   advanceToRetrieval: (id: string) => void;
