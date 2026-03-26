@@ -1,12 +1,13 @@
 import { Link, useLocation } from "react-router-dom";
-import { Building2, Bell } from "lucide-react";
+import { Landmark, Bell } from "lucide-react";
 import { useApp } from "@/context/AppContext";
 import { Badge } from "@/components/ui/badge";
 
 const navItems = [
   { path: "/", label: "الرئيسية" },
-  { path: "/dashboard", label: "لوحة التحكم" },
-  { path: "/admin", label: "الإدارة" },
+  { path: "/services", label: "كتالوج الخدمات" },
+  { path: "/dashboard", label: "لوحة العميل" },
+  { path: "/admin", label: "لوحة الجهة" },
   { path: "/notifications", label: "الإشعارات" },
 ];
 
@@ -20,16 +21,19 @@ const AppHeader = () => {
       <div className="container flex items-center justify-between h-16">
         <Link to="/" className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-lg bg-primary flex items-center justify-center">
-            <Building2 className="w-6 h-6 text-primary-foreground" />
+            <Landmark className="w-6 h-6 text-primary-foreground" />
           </div>
-          <span className="font-bold text-lg">بوابة الخدمات الحكومية</span>
+          <div className="hidden sm:block">
+            <span className="font-bold text-sm leading-tight block">منصة الكيانات الاقتصادية</span>
+            <span className="text-[10px] text-muted-foreground">بوابة المستثمرين</span>
+          </div>
         </Link>
-        <nav className="flex items-center gap-1">
+        <nav className="flex items-center gap-1 overflow-x-auto">
           {navItems.map(item => (
             <Link
               key={item.path}
               to={item.path}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+              className={`px-3 py-2 rounded-lg text-xs sm:text-sm font-medium transition-colors whitespace-nowrap ${
                 location.pathname === item.path
                   ? "bg-primary text-primary-foreground"
                   : "text-muted-foreground hover:bg-secondary"
@@ -38,7 +42,7 @@ const AppHeader = () => {
               {item.label === "الإشعارات" ? (
                 <span className="flex items-center gap-1.5">
                   <Bell className="w-4 h-4" />
-                  {item.label}
+                  <span className="hidden sm:inline">{item.label}</span>
                   {notifCount > 0 && (
                     <Badge variant="destructive" className="text-[10px] h-5 min-w-5 flex items-center justify-center p-0">
                       {notifCount}

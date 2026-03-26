@@ -6,6 +6,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { AppProvider } from "@/context/AppContext";
 import AppHeader from "@/components/AppHeader";
 import Index from "./pages/Index";
+import ServiceCatalog from "./pages/ServiceCatalog";
 import SubmitRequest from "./pages/SubmitRequest";
 import Dashboard from "./pages/Dashboard";
 import AdminPanel from "./pages/AdminPanel";
@@ -26,6 +27,7 @@ const App = () => (
           <AppHeader />
           <Routes>
             <Route path="/" element={<Index />} />
+            <Route path="/services" element={<ServiceCatalog />} />
             <Route path="/submit" element={<SubmitRequest />} />
             <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/admin" element={<AdminPanel />} />
