@@ -15,6 +15,8 @@ export type RequestStatus =
   | "published"          // تم الإصدار / النشر
   ;
 
+export type OutputType = "digital" | "printed_delivery" | "certified_delivery";
+
 export interface UploadedDoc {
   name: string;
   file: File | null;
@@ -34,6 +36,8 @@ export interface ServiceRequest {
   notifications: string[];
   paid: boolean;
   needsRatification: boolean;
+  outputType: OutputType;
+  selectedCompany?: string;
 }
 
 interface AppContextType {
