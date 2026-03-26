@@ -15,6 +15,8 @@ export type RequestStatus =
   | "published"          // تم الإصدار / النشر
   ;
 
+export type OutputType = "digital" | "printed_delivery" | "certified_delivery";
+
 export interface UploadedDoc {
   name: string;
   file: File | null;
@@ -34,12 +36,14 @@ export interface ServiceRequest {
   notifications: string[];
   paid: boolean;
   needsRatification: boolean;
+  outputType: OutputType;
+  selectedCompany?: string;
 }
 
 interface AppContextType {
   requests: ServiceRequest[];
   currentRequest: ServiceRequest | null;
-  submitRequest: (data: Omit<ServiceRequest, "id" | "status" | "createdAt" | "missingDocs" | "certificateNumber" | "notifications" | "paid" | "needsRatification">) => void;
+  submitRequest: (data: Omit<ServiceRequest, "id" | "status" | "createdAt" | "missingDocs" | "certificateNumber" | "notifications" | "paid" | "needsRatification" | "selectedCompany">) => void;
   advanceToIdentity: (id: string) => void;
   advanceToEligibility: (id: string) => void;
   advanceToRetrieval: (id: string) => void;
@@ -75,7 +79,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     });
   };
 
-  const submitRequest = useCallback((data: Omit<ServiceRequest, "id" | "status" | "createdAt" | "missingDocs" | "certificateNumber" | "notifications" | "paid" | "needsRatification">) => {
+  const submitRequest = useCallback((data: Omit<ServiceRequest, "id" | "status" | "createdAt" | "missingDocs" | "certificateNumber" | "notifications" | "paid" | "needsRatification" | "selectedCompany">) => {
     const req: ServiceRequest = {
       ...data,
       id: `REQ-${Date.now().toString(36).toUpperCase()}`,

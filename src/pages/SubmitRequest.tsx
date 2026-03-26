@@ -5,13 +5,41 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useApp } from "@/context/AppContext";
-import { Upload, CheckCircle2, Loader2, Fingerprint, ShieldCheck, FolderSearch, FileCheck } from "lucide-react";
+import { OutputType } from "@/context/AppContext";
+import { Upload, CheckCircle2, Loader2, Fingerprint, ShieldCheck, FolderSearch, FileCheck, FileDigit, Printer, BadgeCheck, Building2, Truck } from "lucide-react";
 
 const requiredDocs = [
   { key: "establishment_cert", label: "شهادة التأسيس" },
   { key: "establishment_contract", label: "عقد التأسيس" },
   { key: "id_card", label: "بطاقة الهوية" },
   { key: "power_of_attorney", label: "التوكيلات" },
+];
+
+const mockCompanies = [
+  { id: "comp-1", name: "شركة النور للتجارة والاستيراد", regNumber: "CR-29481" },
+  { id: "comp-2", name: "مؤسسة الأمل للمقاولات", regNumber: "CR-10273" },
+  { id: "comp-3", name: "شركة المستقبل للتكنولوجيا", regNumber: "CR-55820" },
+];
+
+const outputOptions: { value: OutputType; label: string; desc: string; icon: React.ReactNode }[] = [
+  {
+    value: "digital",
+    label: "ملف رقمي",
+    desc: "شهادة إلكترونية موقعة رقمياً",
+    icon: <FileDigit className="w-5 h-5" />,
+  },
+  {
+    value: "printed_delivery",
+    label: "ملف مطبوع مع التوصيل",
+    desc: "نسخة مطبوعة يتم توصيلها عبر البريد المصري",
+    icon: <Printer className="w-5 h-5" />,
+  },
+  {
+    value: "certified_delivery",
+    label: "ملف موثّق مع التوصيل",
+    desc: "نسخة موثّقة من الجهة يتم توصيلها عبر البريد المصري",
+    icon: <BadgeCheck className="w-5 h-5" />,
+  },
 ];
 
 type Step = "form" | "identity" | "eligibility" | "documents" | "review";
@@ -26,10 +54,12 @@ const SubmitRequest = () => {
     nationalId: "",
     entityType: "individual" as "company" | "individual",
   });
+  const [outputType, setOutputType] = useState<OutputType>("digital");
+  const [selectedCompany, setSelectedCompany] = useState<string>("");
   const [docs, setDocs] = useState<Record<string, File | null>>({});
 
   const allDocsUploaded = requiredDocs.every(d => docs[d.key]);
-  const formValid = form.fullName && form.nationalId;
+  const formValid = form.fullName && form.nationalId && outputType;
 
   const handleSelectService = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -39,7 +69,7 @@ const SubmitRequest = () => {
     requiredDocs.forEach(d => {
       documents[d.key] = { name: d.label, file: null };
     });
-    submitRequest({ ...form, serviceId: "0001", documents });
+    submitRequest({ ...form, serviceId: "0001", documents, outputType });
     await new Promise(r => setTimeout(r, 800));
     setStep("identity");
     setLoading(false);
@@ -57,6 +87,7 @@ const SubmitRequest = () => {
 
   const handleEligibilityCheck = async () => {
     if (!currentRequest) return;
+    if (form.entityType === "company" && !selectedCompany) return;
     setLoading(true);
     await new Promise(r => setTimeout(r, 2000));
     advanceToRetrieval(currentRequest.id);
@@ -146,6 +177,47 @@ const SubmitRequest = () => {
               </div>
             </CardContent>
           </Card>
+
+          {/* Output Type Selection */}
+          <Card>
+            <CardHeader><CardTitle className="text-lg">نوع المخرجات</CardTitle></CardHeader>
+            <CardContent className="space-y-3">
+              {outputOptions.map(opt => (
+                <button
+                  key={opt.value}
+                  type="button"
+                  onClick={() => setOutputType(opt.value)}
+                  className={`w-full flex items-start gap-4 p-4 rounded-xl border-2 text-right transition-all ${
+                    outputType === opt.value
+                      ? "border-primary bg-primary/5 shadow-sm"
+                      : "border-border bg-card hover:border-muted-foreground/30"
+                  }`}
+                >
+                  <div className={`mt-0.5 w-10 h-10 rounded-lg flex items-center justify-center shrink-0 ${
+                    outputType === opt.value ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"
+                  }`}>
+                    {opt.icon}
+                  </div>
+                  <div className="flex-1">
+                    <p className="font-semibold text-sm">{opt.label}</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">{opt.desc}</p>
+                    {opt.value !== "digital" && (
+                      <div className="flex items-center gap-1.5 mt-2 text-xs text-muted-foreground">
+                        <Truck className="w-3.5 h-3.5" />
+                        <span>تكامل مع البريد المصري للتوصيل</span>
+                      </div>
+                    )}
+                  </div>
+                  <div className={`mt-1 w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 ${
+                    outputType === opt.value ? "border-primary" : "border-muted-foreground/40"
+                  }`}>
+                    {outputType === opt.value && <div className="w-2.5 h-2.5 rounded-full bg-primary" />}
+                  </div>
+                </button>
+              ))}
+            </CardContent>
+          </Card>
+
           <Button type="submit" size="lg" className="w-full" disabled={!formValid || loading}>
             {loading ? <><Loader2 className="w-4 h-4 animate-spin" /> جاري التقديم...</> : "اختيار الخدمة والمتابعة"}
           </Button>
@@ -178,28 +250,78 @@ const SubmitRequest = () => {
 
       {/* Step: Eligibility Check */}
       {step === "eligibility" && (
-        <Card>
-          <CardContent className="py-12 text-center space-y-6">
-            <div className="w-20 h-20 rounded-full bg-primary/10 flex items-center justify-center mx-auto">
-              <ShieldCheck className="w-10 h-10 text-primary" />
-            </div>
-            <div>
-              <h3 className="text-xl font-bold mb-2">فحص الأهلية</h3>
-              <p className="text-muted-foreground text-sm">
-                جاري التحقق من أهليتك للحصول على الخدمة
-              </p>
-            </div>
-            <Button onClick={handleEligibilityCheck} disabled={loading} size="lg" className="gap-2">
-              {loading ? <><Loader2 className="w-4 h-4 animate-spin" /> جاري فحص الأهلية...</> : <>
-                <ShieldCheck className="w-4 h-4" />
-                فحص الأهلية
-              </>}
-            </Button>
-          </CardContent>
-        </Card>
+        <div className="space-y-6">
+          <Card>
+            <CardContent className="py-10 text-center space-y-6">
+              <div className="w-20 h-20 rounded-full bg-primary/10 flex items-center justify-center mx-auto">
+                <ShieldCheck className="w-10 h-10 text-primary" />
+              </div>
+              <div>
+                <h3 className="text-xl font-bold mb-2">فحص الأهلية</h3>
+                <p className="text-muted-foreground text-sm">
+                  جاري التحقق من أهليتك للحصول على الخدمة
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Company Selection — only if entityType is company */}
+          {form.entityType === "company" && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg flex items-center gap-2">
+                  <Building2 className="w-5 h-5" />
+                  اختر الشركة
+                </CardTitle>
+                <p className="text-xs text-muted-foreground">تم العثور على {mockCompanies.length} شركات مسجّلة باسمك</p>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {mockCompanies.map(comp => (
+                  <button
+                    key={comp.id}
+                    type="button"
+                    onClick={() => setSelectedCompany(comp.id)}
+                    className={`w-full flex items-center gap-4 p-4 rounded-xl border-2 text-right transition-all ${
+                      selectedCompany === comp.id
+                        ? "border-primary bg-primary/5 shadow-sm"
+                        : "border-border bg-card hover:border-muted-foreground/30"
+                    }`}
+                  >
+                    <div className={`w-10 h-10 rounded-lg flex items-center justify-center shrink-0 ${
+                      selectedCompany === comp.id ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"
+                    }`}>
+                      <Building2 className="w-5 h-5" />
+                    </div>
+                    <div className="flex-1">
+                      <p className="font-semibold text-sm">{comp.name}</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">رقم السجل: {comp.regNumber}</p>
+                    </div>
+                    <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 ${
+                      selectedCompany === comp.id ? "border-primary" : "border-muted-foreground/40"
+                    }`}>
+                      {selectedCompany === comp.id && <div className="w-2.5 h-2.5 rounded-full bg-primary" />}
+                    </div>
+                  </button>
+                ))}
+              </CardContent>
+            </Card>
+          )}
+
+          <Button
+            onClick={handleEligibilityCheck}
+            disabled={loading || (form.entityType === "company" && !selectedCompany)}
+            size="lg"
+            className="w-full gap-2"
+          >
+            {loading ? <><Loader2 className="w-4 h-4 animate-spin" /> جاري فحص الأهلية...</> : <>
+              <ShieldCheck className="w-4 h-4" />
+              {form.entityType === "company" ? "متابعة بالشركة المختارة" : "فحص الأهلية"}
+            </>}
+          </Button>
+        </div>
       )}
 
-      {/* Step: Document Upload (Retrieve & Comply) */}
+      {/* Step: Document Upload */}
       {step === "documents" && (
         <div className="space-y-6">
           <Card>
