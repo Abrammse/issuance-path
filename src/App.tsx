@@ -6,6 +6,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { AppProvider } from "@/context/AppContext";
 import AppHeader from "@/components/AppHeader";
 import Index from "./pages/Index";
+import ServiceCatalog from "./pages/ServiceCatalog";
 import SubmitRequest from "./pages/SubmitRequest";
 import Dashboard from "./pages/Dashboard";
 import AdminPanel from "./pages/AdminPanel";
