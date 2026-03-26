@@ -54,7 +54,7 @@ const Dashboard = () => {
 
   return (
     <div className="container py-10 max-w-4xl">
-      <h1 className="text-2xl font-bold mb-8">لوحة التحكم</h1>
+      <h1 className="text-2xl font-bold mb-8">لوحة العميل</h1>
 
       {requests.length > 1 && (
         <div className="flex gap-2 mb-6 flex-wrap">

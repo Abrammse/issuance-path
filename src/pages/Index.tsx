@@ -1,72 +1,45 @@
 import { Link } from "react-router-dom";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { FileText, Building2, Users, ArrowLeft } from "lucide-react";
-
-const services = [
-  {
-    id: "0001",
-    title: "طلب استخراج شهادة مزاولة مهنة",
-    description: "تقديم طلب للحصول على شهادة مزاولة مهنة من الغرفة التجارية",
-    icon: FileText,
-    available: true,
-  },
-  {
-    id: "0002",
-    title: "تجديد السجل التجاري",
-    description: "تجديد السجل التجاري للشركات والمؤسسات الفردية",
-    icon: Building2,
-    available: false,
-  },
-  {
-    id: "0003",
-    title: "تعديل بيانات المنشأة",
-    description: "تعديل أو تحديث بيانات المنشأة في السجلات الرسمية",
-    icon: Users,
-    available: false,
-  },
-];
+import { Landmark, ArrowLeft, TrendingUp, Shield, Zap } from "lucide-react";
 
 const Index = () => (
   <div className="min-h-[calc(100vh-4rem)]">
     {/* Hero */}
-    <section className="bg-primary text-primary-foreground py-16">
+    <section className="bg-primary text-primary-foreground py-20">
       <div className="container text-center">
-        <h1 className="text-3xl md:text-4xl font-bold mb-4">بوابة الخدمات الحكومية الإلكترونية</h1>
-        <p className="text-primary-foreground/80 text-lg max-w-2xl mx-auto">
-          منصة متكاملة لتقديم الخدمات الحكومية إلكترونياً بسهولة وسرعة
+        <div className="w-16 h-16 rounded-2xl bg-primary-foreground/10 flex items-center justify-center mx-auto mb-6">
+          <Landmark className="w-8 h-8" />
+        </div>
+        <h1 className="text-3xl md:text-4xl font-bold mb-4">منصة الكيانات الاقتصادية</h1>
+        <p className="text-primary-foreground/80 text-lg max-w-2xl mx-auto mb-8">
+          بوابة المستثمرين للخدمات الإلكترونية — من التأسيس إلى التشغيل
         </p>
+        <Button asChild size="lg" variant="secondary" className="gap-2">
+          <Link to="/services">
+            تصفّح كتالوج الخدمات
+            <ArrowLeft className="w-4 h-4" />
+          </Link>
+        </Button>
       </div>
     </section>
 
-    {/* Services */}
-    <section className="container py-12">
-      <h2 className="text-2xl font-bold mb-8">الخدمات المتاحة</h2>
-      <div className="grid md:grid-cols-3 gap-6">
-        {services.map(s => {
-          const Icon = s.icon;
+    {/* Features */}
+    <section className="container py-16">
+      <div className="grid md:grid-cols-3 gap-8">
+        {[
+          { icon: Zap, title: "خدمات رقمية متكاملة", desc: "إنجاز المعاملات إلكترونياً من أي مكان" },
+          { icon: Shield, title: "أمان وموثوقية", desc: "تحقق من الهوية والمستندات عبر بوابة مصر الرقمية" },
+          { icon: TrendingUp, title: "دعم المستثمرين", desc: "خدمات ما قبل التأسيس والتأسيس وما بعد التأسيس" },
+        ].map(f => {
+          const Icon = f.icon;
           return (
-            <Card key={s.id} className={`transition-shadow hover:shadow-md ${!s.available ? "opacity-60" : ""}`}>
-              <CardHeader>
-                <div className="w-12 h-12 rounded-lg bg-primary/10 flex items-center justify-center mb-3">
-                  <Icon className="w-6 h-6 text-primary" />
-                </div>
-                <CardTitle className="text-lg">{s.title}</CardTitle>
-                <CardDescription>{s.description}</CardDescription>
-              </CardHeader>
-              <CardContent>
-                {s.available ? (
-                  <Button asChild className="w-full gap-2">
-                    <Link to="/submit">
-                      ابدأ الطلب
-                      <ArrowLeft className="w-4 h-4" />
-                    </Link>
-                  </Button>
-                ) : (
-                  <Button disabled className="w-full">قريباً</Button>
-                )}
-              </CardContent>
-            </Card>
+            <div key={f.title} className="text-center">
+              <div className="w-14 h-14 rounded-xl bg-primary/10 flex items-center justify-center mx-auto mb-4">
+                <Icon className="w-7 h-7 text-primary" />
+              </div>
+              <h3 className="font-bold mb-2">{f.title}</h3>
+              <p className="text-sm text-muted-foreground">{f.desc}</p>
+            </div>
           );
         })}
       </div>
