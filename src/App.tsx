@@ -12,6 +12,7 @@ import Dashboard from "./pages/Dashboard";
 import AdminPanel from "./pages/AdminPanel";
 import Payment from "./pages/Payment";
 import Certificate from "./pages/Certificate";
+import EstablishCompany from "./pages/EstablishCompany";
 import Notifications from "./pages/Notifications";
 import NotFound from "./pages/NotFound";
 
