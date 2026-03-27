@@ -113,7 +113,7 @@ const ServiceCatalog = () => (
                       <p className="text-[10px] text-muted-foreground mb-3">رقم الخدمة: {s.id}</p>
                       {s.available ? (
                         <Button asChild size="sm" className="w-full gap-2">
-                          <Link to="/submit">
+                          <Link to={s.id === "EST-001" ? "/establish" : "/submit"}>
                             ابدأ الطلب
                             <ArrowLeft className="w-3.5 h-3.5" />
                           </Link>
