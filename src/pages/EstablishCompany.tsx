@@ -9,93 +9,96 @@ import { Separator } from "@/components/ui/separator";
 import {
   CheckCircle2, Loader2, MapPin, Layers, Scale, Gift,
   Search, FileText, PenTool, CreditCard, ArrowLeft, ArrowRight,
-  ChevronLeft, Building2, Plus, Trash2, Eye, ChevronDown, ChevronUp
+  ChevronLeft, Building2, Plus, Trash2, Eye, ChevronDown, ChevronUp,
+  User, ShieldCheck, ClipboardCheck, Clock, XCircle, AlertTriangle,
+  FileCheck, Send, Truck, Monitor, Award
 } from "lucide-react";
 import {
   investmentTypes, eisicActivities, legalForms, incentives,
   checkNameAvailability, calculateContractFees,
-  type ActivityLevel, type NameStatus, type Founder, type LegalForm, type InvestmentType, type Incentive
+  type ActivityLevel, type NameStatus, type Founder, type LegalForm
 } from "@/data/establishmentData";
 
-type WizardStep = "investment_type" | "activities" | "legal_form" | "incentives" | "summary" | "name_check" | "contract" | "payment" | "done";
+type WizardStep =
+  | "investment_type" | "activities" | "legal_form" | "incentives" | "summary"
+  | "identity" | "identity_verify" | "eligibility"
+  | "name_check" | "name_approval" | "name_payment"
+  | "contract" | "contract_review" | "contract_sign" | "contract_verify"
+  | "done";
 
-const STEPS: { key: WizardStep; label: string }[] = [
-  { key: "investment_type", label: "نوع الاستثمار" },
-  { key: "activities", label: "الأنشطة" },
-  { key: "legal_form", label: "الشكل القانوني" },
-  { key: "incentives", label: "الحوافز" },
-  { key: "summary", label: "الملخص" },
-  { key: "name_check", label: "الاسم التجاري" },
-  { key: "contract", label: "العقد" },
-  { key: "payment", label: "الدفع" },
+type OutputType = "digital" | "printed";
+
+const STEPPER_GROUPS = [
+  { label: "المسار", steps: ["investment_type", "activities", "legal_form", "incentives", "summary"] },
+  { label: "الهوية", steps: ["identity", "identity_verify", "eligibility"] },
+  { label: "الاسم", steps: ["name_check", "name_approval", "name_payment"] },
+  { label: "العقد", steps: ["contract", "contract_review", "contract_sign", "contract_verify"] },
 ];
+
+const ALL_STEPS: WizardStep[] = STEPPER_GROUPS.flatMap(g => g.steps) as WizardStep[];
 
 const EstablishCompany = () => {
   const navigate = useNavigate();
   const [step, setStep] = useState<WizardStep>("investment_type");
   const [loading, setLoading] = useState(false);
 
-  // Step 1
-  const [selectedInvestment, setSelectedInvestment] = useState<string>("");
-  // Step 2
+  // Path selection
+  const [selectedInvestment, setSelectedInvestment] = useState("");
   const [expandedActivities, setExpandedActivities] = useState<Set<string>>(new Set());
   const [selectedActivities, setSelectedActivities] = useState<Set<string>>(new Set());
-  // Step 3
-  const [selectedLegalForm, setSelectedLegalForm] = useState<string>("");
-  // Step 4
+  const [selectedLegalForm, setSelectedLegalForm] = useState("");
   const [selectedIncentives, setSelectedIncentives] = useState<Set<string>>(new Set());
-  // Step 6 - Name check
+
+  // Identity
+  const [applicantName, setApplicantName] = useState("");
+  const [applicantNationalId, setApplicantNationalId] = useState("");
+  const [outputType, setOutputType] = useState<OutputType>("digital");
+  const [identityVerified, setIdentityVerified] = useState(false);
+  const [eligibilityChecked, setEligibilityChecked] = useState(false);
+
+  // Name check
   const [companyName, setCompanyName] = useState("");
   const [nameStatus, setNameStatus] = useState<NameStatus | null>(null);
   const [nameMessage, setNameMessage] = useState("");
-  const [nameReserved, setNameReserved] = useState(false);
-  // Step 7 - Contract
+  const [nameLegalChecked, setNameLegalChecked] = useState(false);
+  const [nameEmployeeDecision, setNameEmployeeDecision] = useState<"pending" | "approved" | "rejected" | null>(null);
+  const [nameReservationPaid, setNameReservationPaid] = useState(false);
+
+  // Contract
   const [founders, setFounders] = useState<Founder[]>([
     { id: "f1", name: "", nationalId: "", sharePercentage: 100, role: "founder" },
   ]);
   const [accountant, setAccountant] = useState({ name: "", regNumber: "" });
   const [lawyer, setLawyer] = useState({ name: "", regNumber: "" });
   const [capital, setCapital] = useState<number>(50000);
-  const [signed, setSigned] = useState(false);
   const [contractPreview, setContractPreview] = useState(false);
-  // Step 8 - Payment
-  const [paid, setPaid] = useState(false);
+  const [contractEmployeeDecision, setContractEmployeeDecision] = useState<"pending" | "approved" | "rejected" | "docs_requested" | null>(null);
+  const [requestedDocs, setRequestedDocs] = useState<string[]>([]);
+  const [signed, setSigned] = useState(false);
+  const [contractVerified, setContractVerified] = useState(false);
 
-  const stepIdx = STEPS.findIndex(s => s.key === step);
-
+  const currentIdx = ALL_STEPS.indexOf(step);
+  const goTo = (s: WizardStep) => setStep(s);
   const goNext = () => {
-    const nextIdx = stepIdx + 1;
-    if (nextIdx < STEPS.length) setStep(STEPS[nextIdx].key);
+    const next = currentIdx + 1;
+    if (next < ALL_STEPS.length) setStep(ALL_STEPS[next]);
     else setStep("done");
   };
   const goPrev = () => {
-    if (stepIdx > 0) setStep(STEPS[stepIdx - 1].key);
+    if (currentIdx > 0) setStep(ALL_STEPS[currentIdx - 1]);
   };
 
-  // Activity tree toggle
+  // Activity tree
   const toggleExpand = (id: string) => {
-    setExpandedActivities(prev => {
-      const next = new Set(prev);
-      next.has(id) ? next.delete(id) : next.add(id);
-      return next;
-    });
+    setExpandedActivities(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
   };
   const toggleActivity = (id: string) => {
-    setSelectedActivities(prev => {
-      const next = new Set(prev);
-      next.has(id) ? next.delete(id) : next.add(id);
-      return next;
-    });
+    setSelectedActivities(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
   };
-
-  // Get leaf activities labels
   const getLeafLabel = (nodes: ActivityLevel[], id: string): string => {
     for (const n of nodes) {
       if (n.id === id) return n.label;
-      if (n.children) {
-        const found = getLeafLabel(n.children, id);
-        if (found) return found;
-      }
+      if (n.children) { const f = getLeafLabel(n.children, id); if (f) return f; }
     }
     return "";
   };
@@ -105,47 +108,85 @@ const EstablishCompany = () => {
   const chosenInvestment = investmentTypes.find(i => i.id === selectedInvestment);
   const fees = chosenLegalForm ? calculateContractFees(capital, chosenLegalForm.id) : null;
 
-  // Name check
+  // Simulate identity verification
+  const handleIdentityVerify = async () => {
+    setLoading(true);
+    await new Promise(r => setTimeout(r, 2500));
+    setIdentityVerified(true);
+    setLoading(false);
+  };
+
+  // Simulate eligibility
+  const handleEligibilityCheck = async () => {
+    setLoading(true);
+    await new Promise(r => setTimeout(r, 2000));
+    setEligibilityChecked(true);
+    setLoading(false);
+  };
+
+  // Name check (auto legal)
   const handleNameCheck = async () => {
     if (!companyName.trim()) return;
     setLoading(true);
     setNameStatus(null);
+    setNameLegalChecked(false);
     const result = await checkNameAvailability(companyName);
     setNameStatus(result.status);
     setNameMessage(result.message);
+    if (result.status === "available") {
+      // Auto legal compliance check
+      await new Promise(r => setTimeout(r, 1500));
+      setNameLegalChecked(true);
+    }
     setLoading(false);
   };
 
-  const handleReserveName = async () => {
+  // Employee approval simulation
+  const handleEmployeeNameDecision = async (decision: "approved" | "rejected") => {
     setLoading(true);
-    await new Promise(r => setTimeout(r, 1000));
-    setNameReserved(true);
+    await new Promise(r => setTimeout(r, 1500));
+    setNameEmployeeDecision(decision);
+    setLoading(false);
+  };
+
+  // Pay name reservation
+  const handlePayNameReservation = async () => {
+    setLoading(true);
+    await new Promise(r => setTimeout(r, 2000));
+    setNameReservationPaid(true);
+    setLoading(false);
+  };
+
+  // Contract employee review
+  const handleContractEmployeeDecision = async (decision: "approved" | "rejected" | "docs_requested") => {
+    setLoading(true);
+    await new Promise(r => setTimeout(r, 1500));
+    setContractEmployeeDecision(decision);
+    if (decision === "docs_requested") {
+      setRequestedDocs(["صورة البطاقة الضريبية", "إثبات العنوان"]);
+    }
     setLoading(false);
   };
 
   // Sign contract
   const handleSign = async () => {
     setLoading(true);
-    await new Promise(r => setTimeout(r, 2000));
+    await new Promise(r => setTimeout(r, 2500));
     setSigned(true);
     setLoading(false);
   };
 
-  // Pay
-  const handlePay = async () => {
+  // Verify contract
+  const handleVerifyContract = async () => {
     setLoading(true);
-    await new Promise(r => setTimeout(r, 2000));
-    setPaid(true);
+    await new Promise(r => setTimeout(r, 3000));
+    setContractVerified(true);
     setLoading(false);
   };
 
-  // Founder management
-  const addFounder = () => {
-    setFounders(prev => [...prev, { id: `f${Date.now()}`, name: "", nationalId: "", sharePercentage: 0, role: "founder" }]);
-  };
-  const removeFounder = (id: string) => {
-    setFounders(prev => prev.filter(f => f.id !== id));
-  };
+  // Founders
+  const addFounder = () => setFounders(prev => [...prev, { id: `f${Date.now()}`, name: "", nationalId: "", sharePercentage: 0, role: "founder" }]);
+  const removeFounder = (id: string) => setFounders(prev => prev.filter(f => f.id !== id));
   const updateFounder = (id: string, field: keyof Founder, value: string | number) => {
     setFounders(prev => prev.map(f => f.id === id ? { ...f, [field]: value } : f));
   };
@@ -159,15 +200,10 @@ const EstablishCompany = () => {
         const isSelected = selectedActivities.has(node.id);
         return (
           <div key={node.id} className="my-1">
-            <button
-              type="button"
-              onClick={() => isLeaf ? toggleActivity(node.id) : toggleExpand(node.id)}
+            <button type="button" onClick={() => isLeaf ? toggleActivity(node.id) : toggleExpand(node.id)}
               className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-right transition-colors ${
-                isLeaf && isSelected
-                  ? "bg-primary/10 text-primary border border-primary/30"
-                  : "hover:bg-secondary border border-transparent"
-              }`}
-            >
+                isLeaf && isSelected ? "bg-primary/10 text-primary border border-primary/30" : "hover:bg-secondary border border-transparent"
+              }`}>
               {!isLeaf && (isExpanded ? <ChevronUp className="w-3.5 h-3.5 shrink-0" /> : <ChevronDown className="w-3.5 h-3.5 shrink-0" />)}
               {isLeaf && (
                 <div className={`w-4 h-4 rounded border-2 flex items-center justify-center shrink-0 ${isSelected ? "bg-primary border-primary" : "border-muted-foreground/40"}`}>
@@ -184,6 +220,15 @@ const EstablishCompany = () => {
     </div>
   );
 
+  // Get group progress for stepper
+  const getGroupStatus = (groupSteps: string[]) => {
+    const firstIdx = ALL_STEPS.indexOf(groupSteps[0] as WizardStep);
+    const lastIdx = ALL_STEPS.indexOf(groupSteps[groupSteps.length - 1] as WizardStep);
+    if (currentIdx > lastIdx) return "done";
+    if (currentIdx >= firstIdx && currentIdx <= lastIdx) return "active";
+    return "pending";
+  };
+
   return (
     <div className="container py-8 max-w-3xl">
       <h1 className="text-2xl font-bold mb-1">تأسيس شركة جديدة</h1>
@@ -191,27 +236,28 @@ const EstablishCompany = () => {
 
       {/* Stepper */}
       {step !== "done" && (
-        <div className="flex items-center gap-1 mb-8 overflow-x-auto pb-2">
-          {STEPS.map((s, idx) => {
-            const done = idx < stepIdx;
-            const active = idx === stepIdx;
+        <div className="flex items-center gap-2 mb-8 overflow-x-auto pb-2">
+          {STEPPER_GROUPS.map((g, gIdx) => {
+            const status = getGroupStatus(g.steps);
             return (
-              <div key={s.key} className="flex items-center gap-1 shrink-0">
-                <div className={`w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold ${
-                  active ? "bg-primary text-primary-foreground" :
-                  done ? "bg-primary/80 text-primary-foreground" : "bg-muted text-muted-foreground"
+              <div key={g.label} className="flex items-center gap-2 shrink-0">
+                <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium ${
+                  status === "active" ? "bg-primary text-primary-foreground" :
+                  status === "done" ? "bg-primary/20 text-primary" : "bg-muted text-muted-foreground"
                 }`}>
-                  {done ? <CheckCircle2 className="w-3.5 h-3.5" /> : idx + 1}
+                  {status === "done" && <CheckCircle2 className="w-3.5 h-3.5" />}
+                  {g.label}
                 </div>
-                <span className={`text-[10px] font-medium hidden md:block ${active ? "text-foreground" : "text-muted-foreground"}`}>{s.label}</span>
-                {idx < STEPS.length - 1 && <div className={`w-4 md:w-8 h-0.5 ${done ? "bg-primary" : "bg-border"}`} />}
+                {gIdx < STEPPER_GROUPS.length - 1 && <div className={`w-6 h-0.5 ${status === "done" ? "bg-primary" : "bg-border"}`} />}
               </div>
             );
           })}
         </div>
       )}
 
-      {/* Step 1: Investment Type */}
+      {/* ═══════════════ PATH SELECTION STEPS ═══════════════ */}
+
+      {/* Step: Investment Type */}
       {step === "investment_type" && (
         <div className="space-y-4">
           <Card>
@@ -237,7 +283,7 @@ const EstablishCompany = () => {
         </div>
       )}
 
-      {/* Step 2: Activities */}
+      {/* Step: Activities */}
       {step === "activities" && (
         <div className="space-y-4">
           <Card>
@@ -255,9 +301,7 @@ const EstablishCompany = () => {
                   ))}
                 </div>
               )}
-              <div className="max-h-80 overflow-y-auto">
-                {renderTree(eisicActivities)}
-              </div>
+              <div className="max-h-80 overflow-y-auto">{renderTree(eisicActivities)}</div>
             </CardContent>
           </Card>
           <div className="flex gap-3">
@@ -269,13 +313,12 @@ const EstablishCompany = () => {
         </div>
       )}
 
-      {/* Step 3: Legal Form */}
+      {/* Step: Legal Form */}
       {step === "legal_form" && (
         <div className="space-y-4">
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-lg"><Scale className="w-5 h-5" /> اختر الشكل القانوني</CardTitle>
-              <CardDescription>بناءً على الأنشطة المختارة — اختر الشكل القانوني المناسب</CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
               {legalForms.map(f => (
@@ -287,13 +330,11 @@ const EstablishCompany = () => {
                     <p className="font-semibold text-sm">{f.label}</p>
                     <p className="text-xs text-muted-foreground mt-1">{f.description}</p>
                     <div className="flex gap-4 mt-2 text-xs text-muted-foreground">
-                      <span>الحد الأدنى لرأس المال: {f.minCapital > 0 ? `${f.minCapital.toLocaleString()} ج.م` : "غير محدد"}</span>
-                      <span>عدد المؤسسين: {f.minFounders}+</span>
+                      <span>الحد الأدنى: {f.minCapital > 0 ? `${f.minCapital.toLocaleString()} ج.م` : "غير محدد"}</span>
+                      <span>المؤسسون: {f.minFounders}+</span>
                     </div>
                   </div>
-                  <div className={`mt-1 w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 ${
-                    selectedLegalForm === f.id ? "border-primary" : "border-muted-foreground/40"
-                  }`}>
+                  <div className={`mt-1 w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 ${selectedLegalForm === f.id ? "border-primary" : "border-muted-foreground/40"}`}>
                     {selectedLegalForm === f.id && <div className="w-2.5 h-2.5 rounded-full bg-primary" />}
                   </div>
                 </button>
@@ -302,67 +343,55 @@ const EstablishCompany = () => {
           </Card>
           <div className="flex gap-3">
             <Button variant="outline" onClick={goPrev} className="gap-2"><ArrowRight className="w-4 h-4" /> السابق</Button>
-            <Button onClick={goNext} disabled={!selectedLegalForm} size="lg" className="flex-1 gap-2">
-              التالي <ArrowLeft className="w-4 h-4" />
-            </Button>
+            <Button onClick={goNext} disabled={!selectedLegalForm} size="lg" className="flex-1 gap-2">التالي <ArrowLeft className="w-4 h-4" /></Button>
           </div>
         </div>
       )}
 
-      {/* Step 4: Incentives */}
+      {/* Step: Incentives */}
       {step === "incentives" && (
         <div className="space-y-4">
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-lg"><Gift className="w-5 h-5" /> الحوافز والمزايا المتاحة</CardTitle>
-              <CardDescription>بناءً على منطقة «{chosenInvestment?.label}» — اختر الحوافز التي تنطبق عليك</CardDescription>
+              <CardDescription>بناءً على منطقة «{chosenInvestment?.label}»</CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
               {availableIncentives.length === 0 ? (
-                <p className="text-muted-foreground text-sm text-center py-6">لا توجد حوافز خاصة لهذا النوع من الاستثمار</p>
-              ) : (
-                availableIncentives.map(inc => {
-                  const selected = selectedIncentives.has(inc.id);
-                  return (
-                    <button key={inc.id} type="button" onClick={() => {
-                      setSelectedIncentives(prev => {
-                        const next = new Set(prev);
-                        next.has(inc.id) ? next.delete(inc.id) : next.add(inc.id);
-                        return next;
-                      });
-                    }} className={`w-full flex items-start gap-4 p-4 rounded-xl border-2 text-right transition-all ${
-                      selected ? "border-primary bg-primary/5" : "border-border hover:border-muted-foreground/30"
-                    }`}>
-                      <div className={`w-5 h-5 mt-0.5 rounded border-2 flex items-center justify-center shrink-0 ${selected ? "bg-primary border-primary" : "border-muted-foreground/40"}`}>
-                        {selected && <CheckCircle2 className="w-3.5 h-3.5 text-primary-foreground" />}
-                      </div>
-                      <div className="flex-1">
-                        <p className="font-semibold text-sm">{inc.label}</p>
-                        <p className="text-xs text-muted-foreground mt-1">{inc.description}</p>
-                        <Badge variant="secondary" className="mt-2 text-xs">{inc.discount}</Badge>
-                      </div>
-                    </button>
-                  );
-                })
-              )}
+                <p className="text-muted-foreground text-sm text-center py-6">لا توجد حوافز خاصة لهذا النوع</p>
+              ) : availableIncentives.map(inc => {
+                const sel = selectedIncentives.has(inc.id);
+                return (
+                  <button key={inc.id} type="button" onClick={() => {
+                    setSelectedIncentives(prev => { const n = new Set(prev); n.has(inc.id) ? n.delete(inc.id) : n.add(inc.id); return n; });
+                  }} className={`w-full flex items-start gap-4 p-4 rounded-xl border-2 text-right transition-all ${sel ? "border-primary bg-primary/5" : "border-border hover:border-muted-foreground/30"}`}>
+                    <div className={`w-5 h-5 mt-0.5 rounded border-2 flex items-center justify-center shrink-0 ${sel ? "bg-primary border-primary" : "border-muted-foreground/40"}`}>
+                      {sel && <CheckCircle2 className="w-3.5 h-3.5 text-primary-foreground" />}
+                    </div>
+                    <div className="flex-1">
+                      <p className="font-semibold text-sm">{inc.label}</p>
+                      <p className="text-xs text-muted-foreground mt-1">{inc.description}</p>
+                      <Badge variant="secondary" className="mt-2 text-xs">{inc.discount}</Badge>
+                    </div>
+                  </button>
+                );
+              })}
             </CardContent>
           </Card>
           <div className="flex gap-3">
             <Button variant="outline" onClick={goPrev} className="gap-2"><ArrowRight className="w-4 h-4" /> السابق</Button>
-            <Button onClick={goNext} size="lg" className="flex-1 gap-2">
-              التالي <ArrowLeft className="w-4 h-4" />
-            </Button>
+            <Button onClick={goNext} size="lg" className="flex-1 gap-2">التالي <ArrowLeft className="w-4 h-4" /></Button>
           </div>
         </div>
       )}
 
-      {/* Step 5: Summary */}
+      {/* Step: Summary */}
       {step === "summary" && (
         <div className="space-y-4">
           <Card>
             <CardHeader>
               <CardTitle className="text-lg">ملخص المتطلبات</CardTitle>
-              <CardDescription>مراجعة اختياراتك قبل الانتقال لحجز الاسم التجاري</CardDescription>
+              <CardDescription>مراجعة اختياراتك قبل التحقق من الهوية</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div>
@@ -371,7 +400,7 @@ const EstablishCompany = () => {
               </div>
               <Separator />
               <div>
-                <p className="text-xs text-muted-foreground mb-1">الأنشطة الاقتصادية ({selectedActivities.size})</p>
+                <p className="text-xs text-muted-foreground mb-1">الأنشطة ({selectedActivities.size})</p>
                 <div className="flex flex-wrap gap-1.5">
                   {Array.from(selectedActivities).map(id => (
                     <Badge key={id} variant="outline" className="text-xs">{getLeafLabel(eisicActivities, id)}</Badge>
@@ -384,18 +413,6 @@ const EstablishCompany = () => {
                 <p className="font-semibold text-sm">{chosenLegalForm?.label}</p>
               </div>
               <Separator />
-              <div>
-                <p className="text-xs text-muted-foreground mb-1">الحوافز المختارة</p>
-                {selectedIncentives.size > 0 ? (
-                  <div className="flex flex-wrap gap-1.5">
-                    {Array.from(selectedIncentives).map(id => {
-                      const inc = incentives.find(i => i.id === id);
-                      return <Badge key={id} className="text-xs">{inc?.label}</Badge>;
-                    })}
-                  </div>
-                ) : <p className="text-sm text-muted-foreground">لم يتم اختيار حوافز</p>}
-              </div>
-              <Separator />
               <div className="grid grid-cols-2 gap-4">
                 <div className="p-3 rounded-lg bg-secondary">
                   <p className="text-xs text-muted-foreground">التكلفة التقديرية</p>
@@ -403,85 +420,311 @@ const EstablishCompany = () => {
                 </div>
                 <div className="p-3 rounded-lg bg-secondary">
                   <p className="text-xs text-muted-foreground">الوقت المتوقع</p>
-                  <p className="text-lg font-bold text-primary">5-10 أيام عمل</p>
-                </div>
-              </div>
-              <div>
-                <p className="text-xs text-muted-foreground mb-2">الجهات الحكومية المرتبطة</p>
-                <div className="flex flex-wrap gap-1.5">
-                  <Badge variant="outline" className="text-xs">الهيئة العامة للاستثمار</Badge>
-                  <Badge variant="outline" className="text-xs">مصلحة الشركات</Badge>
-                  <Badge variant="outline" className="text-xs">مصلحة الضرائب</Badge>
-                  {selectedInvestment === "free_zone" && <Badge variant="outline" className="text-xs">هيئة المناطق الحرة</Badge>}
+                  <p className="text-lg font-bold text-primary">5-10 أيام</p>
                 </div>
               </div>
             </CardContent>
           </Card>
           <div className="flex gap-3">
             <Button variant="outline" onClick={goPrev} className="gap-2"><ArrowRight className="w-4 h-4" /> السابق</Button>
-            <Button onClick={goNext} size="lg" className="flex-1 gap-2">
-              الانتقال لحجز الاسم التجاري <ArrowLeft className="w-4 h-4" />
+            <Button onClick={goNext} size="lg" className="flex-1 gap-2">التالي — التحقق من الهوية <ArrowLeft className="w-4 h-4" /></Button>
+          </div>
+        </div>
+      )}
+
+      {/* ═══════════════ IDENTITY & ELIGIBILITY ═══════════════ */}
+
+      {/* Step: Identity Input */}
+      {step === "identity" && (
+        <div className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-lg"><User className="w-5 h-5" /> بيانات مقدم الطلب</CardTitle>
+              <CardDescription>أدخل بياناتك للتحقق من الهوية الرقمية عبر منصة مصر الرقمية</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <Label>الاسم الكامل</Label>
+                <Input value={applicantName} onChange={e => setApplicantName(e.target.value)} placeholder="أدخل الاسم رباعي" />
+              </div>
+              <div className="space-y-2">
+                <Label>الرقم القومي</Label>
+                <Input value={applicantNationalId} onChange={e => setApplicantNationalId(e.target.value)} placeholder="14 رقم" maxLength={14} />
+              </div>
+              <Separator />
+              <div className="space-y-3">
+                <Label className="text-base font-semibold">نوع المخرجات</Label>
+                <div className="grid gap-3">
+                  <button type="button" onClick={() => setOutputType("digital")}
+                    className={`flex items-start gap-3 p-4 rounded-xl border-2 text-right transition-all ${outputType === "digital" ? "border-primary bg-primary/5" : "border-border hover:border-muted-foreground/30"}`}>
+                    <Monitor className={`w-5 h-5 mt-0.5 shrink-0 ${outputType === "digital" ? "text-primary" : "text-muted-foreground"}`} />
+                    <div className="flex-1">
+                      <p className="font-semibold text-sm">ملف رقمي</p>
+                      <p className="text-xs text-muted-foreground mt-1">استلام المخرجات إلكترونياً عبر المنصة</p>
+                    </div>
+                    <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 ${outputType === "digital" ? "border-primary" : "border-muted-foreground/40"}`}>
+                      {outputType === "digital" && <div className="w-2.5 h-2.5 rounded-full bg-primary" />}
+                    </div>
+                  </button>
+                  <button type="button" onClick={() => setOutputType("printed")}
+                    className={`flex items-start gap-3 p-4 rounded-xl border-2 text-right transition-all ${outputType === "printed" ? "border-primary bg-primary/5" : "border-border hover:border-muted-foreground/30"}`}>
+                    <Truck className={`w-5 h-5 mt-0.5 shrink-0 ${outputType === "printed" ? "text-primary" : "text-muted-foreground"}`} />
+                    <div className="flex-1">
+                      <p className="font-semibold text-sm">ملف مطبوع مع التوصيل</p>
+                      <p className="text-xs text-muted-foreground mt-1">توصيل عبر البريد المصري — رسوم إضافية 50 ج.م</p>
+                      <Badge variant="outline" className="mt-2 text-[10px]">تكامل البريد المصري</Badge>
+                    </div>
+                    <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 ${outputType === "printed" ? "border-primary" : "border-muted-foreground/40"}`}>
+                      {outputType === "printed" && <div className="w-2.5 h-2.5 rounded-full bg-primary" />}
+                    </div>
+                  </button>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+          <div className="flex gap-3">
+            <Button variant="outline" onClick={goPrev} className="gap-2"><ArrowRight className="w-4 h-4" /> السابق</Button>
+            <Button onClick={goNext} disabled={!applicantName.trim() || applicantNationalId.length < 14} size="lg" className="flex-1 gap-2">
+              التالي — التحقق من الهوية <ArrowLeft className="w-4 h-4" />
             </Button>
           </div>
         </div>
       )}
 
-      {/* Step 6: Name Check */}
+      {/* Step: Identity Verification */}
+      {step === "identity_verify" && (
+        <div className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-lg"><ShieldCheck className="w-5 h-5" /> التحقق من الهوية الرقمية</CardTitle>
+              <CardDescription>جاري التحقق عبر منصة مصر الرقمية</CardDescription>
+            </CardHeader>
+            <CardContent className="py-8">
+              {!identityVerified ? (
+                <div className="text-center space-y-4">
+                  <div className="w-16 h-16 rounded-full bg-secondary flex items-center justify-center mx-auto">
+                    <ShieldCheck className="w-8 h-8 text-muted-foreground" />
+                  </div>
+                  <div>
+                    <p className="font-semibold">{applicantName}</p>
+                    <p className="text-sm text-muted-foreground">الرقم القومي: {applicantNationalId}</p>
+                  </div>
+                  <Button onClick={handleIdentityVerify} disabled={loading} size="lg" className="gap-2">
+                    {loading ? <><Loader2 className="w-4 h-4 animate-spin" /> جاري التحقق...</> : <><ShieldCheck className="w-4 h-4" /> بدء التحقق</>}
+                  </Button>
+                </div>
+              ) : (
+                <div className="text-center space-y-4">
+                  <div className="w-16 h-16 rounded-full bg-emerald-100 dark:bg-emerald-950 flex items-center justify-center mx-auto">
+                    <CheckCircle2 className="w-8 h-8 text-emerald-600" />
+                  </div>
+                  <p className="font-bold text-emerald-600">تم التحقق من الهوية بنجاح</p>
+                  <p className="text-xs text-muted-foreground">تم مطابقة البيانات مع قاعدة بيانات الأحوال المدنية</p>
+                  <Button onClick={goNext} size="lg" className="gap-2">التالي — فحص الأهلية <ArrowLeft className="w-4 h-4" /></Button>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {/* Step: Eligibility */}
+      {step === "eligibility" && (
+        <div className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-lg"><ClipboardCheck className="w-5 h-5" /> التحقق من الأهلية</CardTitle>
+              <CardDescription>فحص أهلية مقدم الطلب للحصول على خدمة التأسيس</CardDescription>
+            </CardHeader>
+            <CardContent className="py-8">
+              {!eligibilityChecked ? (
+                <div className="text-center space-y-4">
+                  <div className="w-16 h-16 rounded-full bg-secondary flex items-center justify-center mx-auto">
+                    <ClipboardCheck className="w-8 h-8 text-muted-foreground" />
+                  </div>
+                  <div className="text-sm text-muted-foreground space-y-1">
+                    <p>✓ لا يوجد حظر قانوني على مقدم الطلب</p>
+                    <p>✓ التحقق من السجل التجاري السابق</p>
+                    <p>✓ مطابقة نوع الاستثمار مع الشروط</p>
+                  </div>
+                  <Button onClick={handleEligibilityCheck} disabled={loading} size="lg" className="gap-2">
+                    {loading ? <><Loader2 className="w-4 h-4 animate-spin" /> جاري الفحص...</> : <><ClipboardCheck className="w-4 h-4" /> بدء فحص الأهلية</>}
+                  </Button>
+                </div>
+              ) : (
+                <div className="text-center space-y-4">
+                  <div className="w-16 h-16 rounded-full bg-emerald-100 dark:bg-emerald-950 flex items-center justify-center mx-auto">
+                    <CheckCircle2 className="w-8 h-8 text-emerald-600" />
+                  </div>
+                  <p className="font-bold text-emerald-600">مؤهل للحصول على الخدمة</p>
+                  <p className="text-xs text-muted-foreground">تم التحقق من جميع شروط الأهلية بنجاح</p>
+                  <Button onClick={goNext} size="lg" className="gap-2">التالي — حجز الاسم التجاري <ArrowLeft className="w-4 h-4" /></Button>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {/* ═══════════════ NAME CHECK ═══════════════ */}
+
+      {/* Step: Name Check (auto legal compliance) */}
       {step === "name_check" && (
         <div className="space-y-4">
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-lg"><Search className="w-5 h-5" /> التحقق من الاسم التجاري</CardTitle>
-              <CardDescription>أدخل الاسم المقترح للشركة للتحقق من التوفر وعدم التكرار</CardDescription>
+              <CardDescription>أدخل الاسم المقترح — سيتم التحقق التلقائي من التوافق القانوني</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="flex gap-3">
-                <Input value={companyName} onChange={e => { setCompanyName(e.target.value); setNameStatus(null); setNameReserved(false); }}
+                <Input value={companyName} onChange={e => { setCompanyName(e.target.value); setNameStatus(null); setNameLegalChecked(false); }}
                   placeholder="مثال: شركة الابتكار للتكنولوجيا" className="flex-1" />
                 <Button onClick={handleNameCheck} disabled={loading || !companyName.trim()} className="gap-2 shrink-0">
-                  {loading && !nameStatus ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
+                  {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
                   تحقق
                 </Button>
               </div>
+
               {nameStatus && (
-                <div className={`p-4 rounded-xl border-2 ${
+                <div className={`p-4 rounded-xl border-2 space-y-3 ${
                   nameStatus === "available" ? "border-emerald-500/50 bg-emerald-50 dark:bg-emerald-950/20" : "border-destructive/50 bg-destructive/5"
                 }`}>
                   <div className="flex items-center gap-2">
-                    {nameStatus === "available" ? (
-                      <CheckCircle2 className="w-5 h-5 text-emerald-600" />
-                    ) : (
-                      <span className="w-5 h-5 rounded-full bg-destructive text-destructive-foreground flex items-center justify-center text-xs font-bold">✕</span>
-                    )}
+                    {nameStatus === "available" ? <CheckCircle2 className="w-5 h-5 text-emerald-600" /> :
+                      <XCircle className="w-5 h-5 text-destructive" />}
                     <p className="font-semibold text-sm">{nameStatus === "available" ? "الاسم متاح" : "الاسم غير متاح"}</p>
                   </div>
-                  <p className="text-xs text-muted-foreground mt-1 mr-7">{nameMessage}</p>
-                  {nameStatus === "available" && !nameReserved && (
-                    <Button onClick={handleReserveName} disabled={loading} size="sm" className="mt-3 mr-7 gap-2">
-                      {loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : null}
-                      حجز الاسم (رسوم: 100 ج.م)
-                    </Button>
-                  )}
-                  {nameReserved && (
-                    <div className="mt-3 mr-7 flex items-center gap-2 text-emerald-600">
-                      <CheckCircle2 className="w-4 h-4" />
-                      <span className="text-sm font-medium">تم حجز الاسم بنجاح — صالح لمدة 30 يوماً</span>
+                  <p className="text-xs text-muted-foreground mr-7">{nameMessage}</p>
+
+                  {nameStatus === "available" && nameLegalChecked && (
+                    <div className="mr-7 p-3 rounded-lg bg-emerald-100/50 dark:bg-emerald-900/30 space-y-2">
+                      <div className="flex items-center gap-2 text-emerald-700 dark:text-emerald-400">
+                        <FileCheck className="w-4 h-4" />
+                        <span className="text-sm font-medium">التحقق القانوني التلقائي: متوافق ✓</span>
+                      </div>
+                      <p className="text-xs text-muted-foreground">لا يتعارض مع أسماء محظورة أو علامات تجارية مسجلة</p>
                     </div>
+                  )}
+
+                  {nameStatus === "available" && nameLegalChecked && (
+                    <Button onClick={goNext} size="sm" className="mr-7 gap-2">
+                      إرسال للموظف للموافقة <ArrowLeft className="w-4 h-4" />
+                    </Button>
                   )}
                 </div>
               )}
             </CardContent>
           </Card>
-          <div className="flex gap-3">
-            <Button variant="outline" onClick={goPrev} className="gap-2"><ArrowRight className="w-4 h-4" /> السابق</Button>
-            <Button onClick={goNext} disabled={!nameReserved} size="lg" className="flex-1 gap-2">
-              التالي — إعداد العقد <ArrowLeft className="w-4 h-4" />
-            </Button>
-          </div>
         </div>
       )}
 
-      {/* Step 7: Contract */}
+      {/* Step: Name Approval (employee simulation) */}
+      {step === "name_approval" && (
+        <div className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-lg"><ClipboardCheck className="w-5 h-5" /> مراجعة الموظف — الاسم التجاري</CardTitle>
+              <CardDescription>الاسم المقترح: <strong>{companyName}</strong></CardDescription>
+            </CardHeader>
+            <CardContent className="py-6">
+              {!nameEmployeeDecision ? (
+                <div className="text-center space-y-4">
+                  <div className="w-16 h-16 rounded-full bg-amber-100 dark:bg-amber-950 flex items-center justify-center mx-auto">
+                    <Clock className="w-8 h-8 text-amber-600" />
+                  </div>
+                  <p className="font-semibold">في انتظار قرار الموظف</p>
+                  <p className="text-xs text-muted-foreground">محاكاة: اضغط أحد الأزرار التالية</p>
+                  <div className="flex gap-3 justify-center">
+                    <Button onClick={() => handleEmployeeNameDecision("approved")} disabled={loading} className="gap-2 bg-emerald-600 hover:bg-emerald-700">
+                      {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />} موافقة
+                    </Button>
+                    <Button onClick={() => handleEmployeeNameDecision("rejected")} disabled={loading} variant="destructive" className="gap-2">
+                      {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <XCircle className="w-4 h-4" />} رفض
+                    </Button>
+                  </div>
+                </div>
+              ) : nameEmployeeDecision === "approved" ? (
+                <div className="text-center space-y-4">
+                  <div className="w-16 h-16 rounded-full bg-emerald-100 dark:bg-emerald-950 flex items-center justify-center mx-auto">
+                    <CheckCircle2 className="w-8 h-8 text-emerald-600" />
+                  </div>
+                  <p className="font-bold text-emerald-600">تمت الموافقة على الاسم</p>
+                  <div className="p-3 rounded-lg bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800">
+                    <div className="flex items-center gap-2 text-amber-700 dark:text-amber-400">
+                      <Clock className="w-4 h-4" />
+                      <span className="text-sm font-medium">محجوز مؤقتاً لمدة 48 ساعة</span>
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-1">يجب سداد رسوم الحجز خلال 48 ساعة لتأكيد الحجز لمدة 15 يوم</p>
+                  </div>
+                  <Button onClick={goNext} size="lg" className="gap-2">
+                    سداد رسوم الحجز <ArrowLeft className="w-4 h-4" />
+                  </Button>
+                </div>
+              ) : (
+                <div className="text-center space-y-4">
+                  <div className="w-16 h-16 rounded-full bg-destructive/10 flex items-center justify-center mx-auto">
+                    <XCircle className="w-8 h-8 text-destructive" />
+                  </div>
+                  <p className="font-bold text-destructive">تم رفض الاسم التجاري</p>
+                  <p className="text-xs text-muted-foreground">يمكنك العودة واختيار اسم آخر</p>
+                  <Button variant="outline" onClick={() => { setNameEmployeeDecision(null); setNameStatus(null); setNameLegalChecked(false); goTo("name_check"); }} className="gap-2">
+                    <ArrowRight className="w-4 h-4" /> اختيار اسم آخر
+                  </Button>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {/* Step: Name Payment */}
+      {step === "name_payment" && (
+        <div className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-lg"><CreditCard className="w-5 h-5" /> سداد رسوم حجز الاسم</CardTitle>
+              <CardDescription>سداد 100 ج.م لتأكيد حجز الاسم التجاري لمدة 15 يوم</CardDescription>
+            </CardHeader>
+            <CardContent className="py-6">
+              {!nameReservationPaid ? (
+                <div className="text-center space-y-4">
+                  <div className="p-4 rounded-xl bg-secondary max-w-xs mx-auto">
+                    <div className="flex justify-between text-sm">
+                      <span className="text-muted-foreground">الاسم</span>
+                      <span className="font-semibold">{companyName}</span>
+                    </div>
+                    <Separator className="my-2" />
+                    <div className="flex justify-between font-bold">
+                      <span>رسوم الحجز</span>
+                      <span className="text-primary">100 ج.م</span>
+                    </div>
+                  </div>
+                  <Button onClick={handlePayNameReservation} disabled={loading} size="lg" className="gap-2">
+                    {loading ? <><Loader2 className="w-4 h-4 animate-spin" /> جاري السداد...</> : <><CreditCard className="w-4 h-4" /> سداد الآن</>}
+                  </Button>
+                </div>
+              ) : (
+                <div className="text-center space-y-4">
+                  <div className="w-16 h-16 rounded-full bg-emerald-100 dark:bg-emerald-950 flex items-center justify-center mx-auto">
+                    <CheckCircle2 className="w-8 h-8 text-emerald-600" />
+                  </div>
+                  <p className="font-bold text-emerald-600">تم السداد وتأكيد الحجز</p>
+                  <div className="p-3 rounded-lg bg-primary/5 border border-primary/20 max-w-xs mx-auto">
+                    <p className="text-sm font-medium">الاسم محجوز لمدة <strong className="text-primary">15 يوم</strong></p>
+                    <p className="text-xs text-muted-foreground mt-1">يجب إتمام إجراءات التأسيس قبل انتهاء مدة الحجز</p>
+                  </div>
+                  <Button onClick={goNext} size="lg" className="gap-2">التالي — إعداد العقد <ArrowLeft className="w-4 h-4" /></Button>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {/* ═══════════════ CONTRACT ═══════════════ */}
+
+      {/* Step: Contract Data Entry */}
       {step === "contract" && (
         <div className="space-y-4">
           <Card>
@@ -490,29 +733,25 @@ const EstablishCompany = () => {
               <CardDescription>أدخل بيانات المؤسسين والمستشارين — {chosenLegalForm?.label}</CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
-              {/* Capital */}
               <div>
                 <Label>رأس المال (ج.م)</Label>
                 <Input type="number" value={capital} onChange={e => setCapital(Number(e.target.value))} min={chosenLegalForm?.minCapital || 0} className="mt-1" />
                 {chosenLegalForm && chosenLegalForm.minCapital > 0 && capital < chosenLegalForm.minCapital && (
-                  <p className="text-destructive text-xs mt-1">الحد الأدنى لرأس المال: {chosenLegalForm.minCapital.toLocaleString()} ج.م</p>
+                  <p className="text-destructive text-xs mt-1">الحد الأدنى: {chosenLegalForm.minCapital.toLocaleString()} ج.م</p>
                 )}
               </div>
               <Separator />
-              {/* Founders */}
               <div>
                 <div className="flex items-center justify-between mb-3">
                   <Label className="text-base font-semibold">المؤسسون</Label>
-                  <Button variant="outline" size="sm" onClick={addFounder} className="gap-1"><Plus className="w-3.5 h-3.5" /> إضافة مؤسس</Button>
+                  <Button variant="outline" size="sm" onClick={addFounder} className="gap-1"><Plus className="w-3.5 h-3.5" /> إضافة</Button>
                 </div>
                 <div className="space-y-3">
                   {founders.map((f, idx) => (
                     <div key={f.id} className="p-3 rounded-lg border bg-card space-y-2">
                       <div className="flex items-center justify-between">
                         <span className="text-xs font-medium text-muted-foreground">مؤسس {idx + 1}</span>
-                        {founders.length > 1 && (
-                          <Button variant="ghost" size="sm" onClick={() => removeFounder(f.id)} className="h-7 w-7 p-0 text-destructive"><Trash2 className="w-3.5 h-3.5" /></Button>
-                        )}
+                        {founders.length > 1 && <Button variant="ghost" size="sm" onClick={() => removeFounder(f.id)} className="h-7 w-7 p-0 text-destructive"><Trash2 className="w-3.5 h-3.5" /></Button>}
                       </div>
                       <div className="grid grid-cols-2 gap-2">
                         <Input placeholder="الاسم الكامل" value={f.name} onChange={e => updateFounder(f.id, "name", e.target.value)} />
@@ -532,7 +771,6 @@ const EstablishCompany = () => {
                 </div>
               </div>
               <Separator />
-              {/* Accountant & Lawyer */}
               <div className="grid sm:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label className="font-semibold">المحاسب القانوني</Label>
@@ -546,13 +784,12 @@ const EstablishCompany = () => {
                 </div>
               </div>
               <Separator />
-              {/* Fee summary */}
               {fees && (
                 <div className="p-4 rounded-xl bg-secondary space-y-2">
                   <p className="font-semibold text-sm">رسوم العقد</p>
                   <div className="grid grid-cols-2 gap-2 text-xs">
                     <span className="text-muted-foreground">رسوم أساسية</span><span>{fees.baseFee.toLocaleString()} ج.م</span>
-                    <span className="text-muted-foreground">رسم دمغة (0.25% من رأس المال)</span><span>{fees.stampFee.toLocaleString()} ج.م</span>
+                    <span className="text-muted-foreground">رسم دمغة</span><span>{fees.stampFee.toLocaleString()} ج.م</span>
                     <span className="text-muted-foreground">رسم تسجيل</span><span>{fees.registrationFee.toLocaleString()} ج.م</span>
                   </div>
                   <Separator />
@@ -577,68 +814,84 @@ const EstablishCompany = () => {
                 <p className="font-bold text-foreground text-center">عقد تأسيس {chosenLegalForm?.label}</p>
                 <p>إنه في يوم {new Date().toLocaleDateString("ar-EG")} تم الاتفاق بين كل من:</p>
                 {founders.map((f, i) => (
-                  <p key={f.id}>الطرف {i === 0 ? "الأول" : i === 1 ? "الثاني" : `${i + 1}`}: السيد/ {f.name || "___________"} — رقم قومي: {f.nationalId || "__________"} — حصة: {f.sharePercentage}%</p>
+                  <p key={f.id}>الطرف {i === 0 ? "الأول" : i === 1 ? "الثاني" : `${i + 1}`}: السيد/ {f.name || "___"} — رقم قومي: {f.nationalId || "___"} — حصة: {f.sharePercentage}%</p>
                 ))}
                 <p>على تأسيس شركة باسم: <strong className="text-foreground">{companyName}</strong></p>
                 <p>برأس مال قدره: <strong className="text-foreground">{capital.toLocaleString()} جنيه مصري</strong></p>
                 <p>الأنشطة: {Array.from(selectedActivities).map(id => getLeafLabel(eisicActivities, id)).join("، ")}</p>
-                <p className="text-xs text-muted-foreground/70">... (باقي بنود العقد حسب النموذج المعتمد من مصلحة الشركات)</p>
               </CardContent>
             )}
           </Card>
 
-          {/* Sign */}
-          {!signed ? (
-            <Button onClick={handleSign} disabled={loading || founders.some(f => !f.name || !f.nationalId)} size="lg" className="w-full gap-2">
-              {loading ? <><Loader2 className="w-4 h-4 animate-spin" /> جاري التوقيع الإلكتروني...</> : <><PenTool className="w-4 h-4" /> توقيع العقد إلكترونياً</>}
-            </Button>
-          ) : (
-            <div className="space-y-3">
-              <div className="flex items-center gap-2 text-emerald-600 justify-center py-3">
-                <CheckCircle2 className="w-5 h-5" />
-                <span className="font-semibold">تم توقيع العقد بنجاح من جميع الأطراف</span>
-              </div>
-              <div className="flex gap-3">
-                <Button variant="outline" onClick={goPrev} className="gap-2"><ArrowRight className="w-4 h-4" /> السابق</Button>
-                <Button onClick={goNext} size="lg" className="flex-1 gap-2">الانتقال للدفع <ArrowLeft className="w-4 h-4" /></Button>
-              </div>
-            </div>
-          )}
+          <Button onClick={goNext} disabled={founders.some(f => !f.name || !f.nationalId)} size="lg" className="w-full gap-2">
+            <Send className="w-4 h-4" /> إرسال العقد للمراجعة
+          </Button>
         </div>
       )}
 
-      {/* Step 8: Payment */}
-      {step === "payment" && (
+      {/* Step: Contract Review (employee) */}
+      {step === "contract_review" && (
         <div className="space-y-4">
           <Card>
             <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-lg"><CreditCard className="w-5 h-5" /> سداد الرسوم</CardTitle>
+              <CardTitle className="flex items-center gap-2 text-lg"><ClipboardCheck className="w-5 h-5" /> مراجعة الموظف — العقد</CardTitle>
+              <CardDescription>مراجعة نموذج العقد والمستندات من قبل الجهة المختصة</CardDescription>
             </CardHeader>
-            <CardContent className="space-y-4">
-              {fees && (
-                <div className="p-4 rounded-xl bg-secondary space-y-2">
-                  <div className="grid grid-cols-2 gap-2 text-sm">
-                    <span className="text-muted-foreground">رسوم العقد</span><span>{fees.total.toLocaleString()} ج.م</span>
-                    <span className="text-muted-foreground">رسوم حجز الاسم</span><span>100 ج.م</span>
+            <CardContent className="py-6">
+              {!contractEmployeeDecision ? (
+                <div className="text-center space-y-4">
+                  <div className="w-16 h-16 rounded-full bg-amber-100 dark:bg-amber-950 flex items-center justify-center mx-auto">
+                    <Clock className="w-8 h-8 text-amber-600" />
                   </div>
-                  <Separator />
-                  <div className="flex justify-between font-bold">
-                    <span>الإجمالي</span><span className="text-primary text-lg">{(fees.total + 100).toLocaleString()} ج.م</span>
+                  <p className="font-semibold">في انتظار مراجعة الموظف</p>
+                  <p className="text-xs text-muted-foreground">محاكاة: اختر قرار الموظف</p>
+                  <div className="flex flex-wrap gap-3 justify-center">
+                    <Button onClick={() => handleContractEmployeeDecision("approved")} disabled={loading} className="gap-2 bg-emerald-600 hover:bg-emerald-700">
+                      {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />} موافقة
+                    </Button>
+                    <Button onClick={() => handleContractEmployeeDecision("docs_requested")} disabled={loading} variant="outline" className="gap-2">
+                      {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <AlertTriangle className="w-4 h-4" />} طلب مستندات
+                    </Button>
+                    <Button onClick={() => handleContractEmployeeDecision("rejected")} disabled={loading} variant="destructive" className="gap-2">
+                      {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <XCircle className="w-4 h-4" />} رفض
+                    </Button>
                   </div>
                 </div>
-              )}
-              {!paid ? (
-                <Button onClick={handlePay} disabled={loading} size="lg" className="w-full gap-2">
-                  {loading ? <><Loader2 className="w-4 h-4 animate-spin" /> جاري السداد...</> : <><CreditCard className="w-4 h-4" /> سداد الآن</>}
-                </Button>
-              ) : (
-                <div className="text-center space-y-4 py-4">
+              ) : contractEmployeeDecision === "approved" ? (
+                <div className="text-center space-y-4">
                   <div className="w-16 h-16 rounded-full bg-emerald-100 dark:bg-emerald-950 flex items-center justify-center mx-auto">
                     <CheckCircle2 className="w-8 h-8 text-emerald-600" />
                   </div>
-                  <p className="font-bold text-lg">تم السداد بنجاح</p>
-                  <Button onClick={() => setStep("done")} size="lg" className="gap-2">
-                    عرض شهادة التأسيس <ArrowLeft className="w-4 h-4" />
+                  <p className="font-bold text-emerald-600">تمت الموافقة على العقد</p>
+                  <p className="text-xs text-muted-foreground">يمكنك الآن التوقيع الإلكتروني</p>
+                  <Button onClick={goNext} size="lg" className="gap-2">
+                    <PenTool className="w-4 h-4" /> الانتقال للتوقيع
+                  </Button>
+                </div>
+              ) : contractEmployeeDecision === "docs_requested" ? (
+                <div className="text-center space-y-4">
+                  <div className="w-16 h-16 rounded-full bg-amber-100 dark:bg-amber-950 flex items-center justify-center mx-auto">
+                    <AlertTriangle className="w-8 h-8 text-amber-600" />
+                  </div>
+                  <p className="font-bold text-amber-600">مطلوب مستندات إضافية</p>
+                  <div className="p-3 rounded-lg bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 max-w-xs mx-auto text-right">
+                    {requestedDocs.map((doc, i) => (
+                      <p key={i} className="text-sm">• {doc}</p>
+                    ))}
+                  </div>
+                  <Button variant="outline" onClick={() => { setContractEmployeeDecision(null); goTo("contract"); }} className="gap-2">
+                    <ArrowRight className="w-4 h-4" /> العودة لتعديل العقد
+                  </Button>
+                </div>
+              ) : (
+                <div className="text-center space-y-4">
+                  <div className="w-16 h-16 rounded-full bg-destructive/10 flex items-center justify-center mx-auto">
+                    <XCircle className="w-8 h-8 text-destructive" />
+                  </div>
+                  <p className="font-bold text-destructive">تم رفض العقد</p>
+                  <p className="text-xs text-muted-foreground">يمكنك تعديل البيانات وإعادة الإرسال</p>
+                  <Button variant="outline" onClick={() => { setContractEmployeeDecision(null); goTo("contract"); }} className="gap-2">
+                    <ArrowRight className="w-4 h-4" /> تعديل العقد
                   </Button>
                 </div>
               )}
@@ -647,7 +900,100 @@ const EstablishCompany = () => {
         </div>
       )}
 
-      {/* Done */}
+      {/* Step: Contract Signing */}
+      {step === "contract_sign" && (
+        <div className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-lg"><PenTool className="w-5 h-5" /> التوقيع الإلكتروني</CardTitle>
+              <CardDescription>توقيع العقد إلكترونياً من جميع المؤسسين</CardDescription>
+            </CardHeader>
+            <CardContent className="py-6">
+              {!signed ? (
+                <div className="text-center space-y-4">
+                  <div className="space-y-2 max-w-xs mx-auto text-right">
+                    {founders.map((f, i) => (
+                      <div key={f.id} className="flex items-center gap-2 p-2 rounded-lg bg-secondary text-sm">
+                        <div className="w-6 h-6 rounded-full bg-muted flex items-center justify-center text-xs">{i + 1}</div>
+                        <span className="flex-1">{f.name || "مؤسس"}</span>
+                        <Badge variant="outline" className="text-[10px]">في الانتظار</Badge>
+                      </div>
+                    ))}
+                  </div>
+                  <Button onClick={handleSign} disabled={loading} size="lg" className="gap-2">
+                    {loading ? <><Loader2 className="w-4 h-4 animate-spin" /> جاري التوقيع الإلكتروني...</> : <><PenTool className="w-4 h-4" /> توقيع العقد</>}
+                  </Button>
+                </div>
+              ) : (
+                <div className="text-center space-y-4">
+                  <div className="w-16 h-16 rounded-full bg-emerald-100 dark:bg-emerald-950 flex items-center justify-center mx-auto">
+                    <CheckCircle2 className="w-8 h-8 text-emerald-600" />
+                  </div>
+                  <p className="font-bold text-emerald-600">تم توقيع العقد من جميع الأطراف</p>
+                  <Button onClick={goNext} size="lg" className="gap-2">التالي — التحقق والإصدار <ArrowLeft className="w-4 h-4" /></Button>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {/* Step: Contract Verification & Issuance */}
+      {step === "contract_verify" && (
+        <div className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-lg"><ShieldCheck className="w-5 h-5" /> التحقق وإصدار عقد التأسيس</CardTitle>
+              <CardDescription>التحقق النهائي من العقد وإصدار شهادة التأسيس</CardDescription>
+            </CardHeader>
+            <CardContent className="py-6">
+              {!contractVerified ? (
+                <div className="text-center space-y-4">
+                  <div className="w-16 h-16 rounded-full bg-secondary flex items-center justify-center mx-auto">
+                    <ShieldCheck className="w-8 h-8 text-muted-foreground" />
+                  </div>
+                  <div className="text-sm text-muted-foreground space-y-1">
+                    <p>✓ مطابقة التوقيعات الإلكترونية</p>
+                    <p>✓ التحقق من صحة البيانات</p>
+                    <p>✓ تسجيل العقد في مصلحة الشركات</p>
+                    <p>✓ إصدار رقم السجل التجاري</p>
+                  </div>
+                  <Button onClick={handleVerifyContract} disabled={loading} size="lg" className="gap-2">
+                    {loading ? <><Loader2 className="w-4 h-4 animate-spin" /> جاري التحقق والإصدار...</> : <><ShieldCheck className="w-4 h-4" /> بدء التحقق</>}
+                  </Button>
+                </div>
+              ) : (
+                <div className="text-center space-y-4">
+                  <div className="w-16 h-16 rounded-full bg-emerald-100 dark:bg-emerald-950 flex items-center justify-center mx-auto">
+                    <CheckCircle2 className="w-8 h-8 text-emerald-600" />
+                  </div>
+                  <p className="font-bold text-emerald-600">تم التحقق والتسجيل بنجاح</p>
+                  {fees && (
+                    <div className="p-4 rounded-xl bg-secondary max-w-xs mx-auto space-y-2">
+                      <p className="text-sm font-semibold">رسوم الإصدار المستحقة</p>
+                      <div className="grid grid-cols-2 gap-1 text-xs">
+                        <span className="text-muted-foreground">رسوم العقد</span><span>{fees.total.toLocaleString()} ج.م</span>
+                        <span className="text-muted-foreground">رسوم حجز الاسم</span><span>100 ج.م</span>
+                        {outputType === "printed" && <><span className="text-muted-foreground">رسوم التوصيل</span><span>50 ج.م</span></>}
+                      </div>
+                      <Separator />
+                      <div className="flex justify-between font-bold text-sm">
+                        <span>الإجمالي</span>
+                        <span className="text-primary">{(fees.total + 100 + (outputType === "printed" ? 50 : 0)).toLocaleString()} ج.م</span>
+                      </div>
+                    </div>
+                  )}
+                  <Button onClick={() => setStep("done")} size="lg" className="gap-2">
+                    <Award className="w-4 h-4" /> عرض شهادة التأسيس
+                  </Button>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {/* ═══════════════ DONE ═══════════════ */}
       {step === "done" && (
         <div className="space-y-6">
           <Card className="border-emerald-500/30 bg-emerald-50/50 dark:bg-emerald-950/20">
@@ -676,14 +1022,18 @@ const EstablishCompany = () => {
                   <span className="text-muted-foreground">رأس المال</span>
                   <span className="font-semibold">{capital.toLocaleString()} ج.م</span>
                 </div>
+                <div className="flex justify-between text-sm p-3 rounded-lg bg-background border">
+                  <span className="text-muted-foreground">مقدم الطلب</span>
+                  <span className="font-semibold">{applicantName}</span>
+                </div>
+                <div className="flex justify-between text-sm p-3 rounded-lg bg-background border">
+                  <span className="text-muted-foreground">نوع المخرجات</span>
+                  <span className="font-semibold">{outputType === "digital" ? "ملف رقمي" : "مطبوع مع التوصيل"}</span>
+                </div>
               </div>
               <div className="flex gap-3 justify-center pt-4">
-                <Button variant="outline" onClick={() => navigate("/services")} className="gap-2">
-                  العودة للكتالوج
-                </Button>
-                <Button onClick={() => navigate("/dashboard")} className="gap-2">
-                  لوحة العميل <ArrowLeft className="w-4 h-4" />
-                </Button>
+                <Button variant="outline" onClick={() => navigate("/services")} className="gap-2">العودة للكتالوج</Button>
+                <Button onClick={() => navigate("/dashboard")} className="gap-2">لوحة العميل <ArrowLeft className="w-4 h-4" /></Button>
               </div>
             </CardContent>
           </Card>
