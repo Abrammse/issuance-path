@@ -12,6 +12,7 @@ import Dashboard from "./pages/Dashboard";
 import AdminPanel from "./pages/AdminPanel";
 import Payment from "./pages/Payment";
 import Certificate from "./pages/Certificate";
+import EstablishCompany from "./pages/EstablishCompany";
 import Notifications from "./pages/Notifications";
 import NotFound from "./pages/NotFound";
 
@@ -31,6 +32,7 @@ const App = () => (
             <Route path="/submit" element={<SubmitRequest />} />
             <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/admin" element={<AdminPanel />} />
+            <Route path="/establish" element={<EstablishCompany />} />
             <Route path="/payment" element={<Payment />} />
             <Route path="/certificate" element={<Certificate />} />
             <Route path="/notifications" element={<Notifications />} />
