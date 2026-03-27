@@ -44,7 +44,7 @@ const tracks: Track[] = [
     icon: Building,
     color: "bg-primary/10 text-primary",
     services: [
-      { id: "EST-001", title: "تأسيس شركة ذات مسؤولية محدودة", description: "إجراءات تأسيس شركة ذ.م.م", icon: Building, available: false },
+      { id: "EST-001", title: "تأسيس شركة جديدة", description: "إجراءات تأسيس كيان اقتصادي جديد — اختيار النشاط والشكل القانوني وتوثيق العقد", icon: Building, available: true },
       { id: "EST-002", title: "تأسيس مؤسسة فردية", description: "تسجيل مؤسسة فردية جديدة", icon: Users, available: false },
       { id: "EST-003", title: "تأسيس شركة مساهمة", description: "إجراءات تأسيس شركة مساهمة", icon: Scale, available: false },
     ],
