@@ -1,5 +1,6 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
+import { useApp } from "@/context/AppContext";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -39,8 +40,10 @@ const ALL_STEPS: WizardStep[] = STEPPER_GROUPS.flatMap(g => g.steps) as WizardSt
 
 const EstablishCompany = () => {
   const navigate = useNavigate();
+  const { submitEstablishment, getEstablishment, updateEstablishmentStage, establishmentRequests } = useApp();
   const [step, setStep] = useState<WizardStep>("investment_type");
   const [loading, setLoading] = useState(false);
+  const [estId, setEstId] = useState<string | null>(null);
 
   // Path selection
   const [selectedInvestment, setSelectedInvestment] = useState("");
@@ -61,7 +64,6 @@ const EstablishCompany = () => {
   const [nameStatus, setNameStatus] = useState<NameStatus | null>(null);
   const [nameMessage, setNameMessage] = useState("");
   const [nameLegalChecked, setNameLegalChecked] = useState(false);
-  const [nameEmployeeDecision, setNameEmployeeDecision] = useState<"pending" | "approved" | "rejected" | null>(null);
   const [nameReservationPaid, setNameReservationPaid] = useState(false);
 
   // Contract
@@ -72,10 +74,23 @@ const EstablishCompany = () => {
   const [lawyer, setLawyer] = useState({ name: "", regNumber: "" });
   const [capital, setCapital] = useState<number>(50000);
   const [contractPreview, setContractPreview] = useState(false);
-  const [contractEmployeeDecision, setContractEmployeeDecision] = useState<"pending" | "approved" | "rejected" | "docs_requested" | null>(null);
-  const [requestedDocs, setRequestedDocs] = useState<string[]>([]);
   const [signed, setSigned] = useState(false);
   const [contractVerified, setContractVerified] = useState(false);
+
+  // Get current establishment request from context
+  const estRequest = estId ? getEstablishment(estId) : undefined;
+
+  // Watch for admin decisions on name/contract
+  useEffect(() => {
+    if (!estRequest) return;
+    // Auto-advance when admin approves name while on name_approval step
+    if (step === "name_approval" && estRequest.stage === "name_approved") {
+      // Already showing approved state
+    }
+    if (step === "name_approval" && estRequest.stage === "name_rejected") {
+      // Already showing rejected state
+    }
+  }, [estRequest, step]);
 
   const currentIdx = ALL_STEPS.indexOf(step);
   const goTo = (s: WizardStep) => setStep(s);
@@ -134,19 +149,27 @@ const EstablishCompany = () => {
     setNameStatus(result.status);
     setNameMessage(result.message);
     if (result.status === "available") {
-      // Auto legal compliance check
       await new Promise(r => setTimeout(r, 1500));
       setNameLegalChecked(true);
     }
     setLoading(false);
   };
 
-  // Employee approval simulation
-  const handleEmployeeNameDecision = async (decision: "approved" | "rejected") => {
-    setLoading(true);
-    await new Promise(r => setTimeout(r, 1500));
-    setNameEmployeeDecision(decision);
-    setLoading(false);
+  // Submit to admin for name approval
+  const handleSubmitForNameApproval = () => {
+    const est = submitEstablishment({
+      applicantName,
+      applicantNationalId,
+      companyName,
+      legalForm: selectedLegalForm,
+      investmentType: selectedInvestment,
+      activities: Array.from(selectedActivities),
+      capital,
+      outputType,
+      founders: founders.map(f => ({ name: f.name, nationalId: f.nationalId, sharePercentage: f.sharePercentage, role: f.role })),
+    });
+    setEstId(est.id);
+    goNext();
   };
 
   // Pay name reservation
@@ -157,15 +180,12 @@ const EstablishCompany = () => {
     setLoading(false);
   };
 
-  // Contract employee review
-  const handleContractEmployeeDecision = async (decision: "approved" | "rejected" | "docs_requested") => {
-    setLoading(true);
-    await new Promise(r => setTimeout(r, 1500));
-    setContractEmployeeDecision(decision);
-    if (decision === "docs_requested") {
-      setRequestedDocs(["صورة البطاقة الضريبية", "إثبات العنوان"]);
+  // Submit contract for review
+  const handleSubmitContractForReview = () => {
+    if (estId) {
+      updateEstablishmentStage(estId, "contract_pending");
     }
-    setLoading(false);
+    goNext();
   };
 
   // Sign contract
@@ -181,6 +201,7 @@ const EstablishCompany = () => {
     setLoading(true);
     await new Promise(r => setTimeout(r, 3000));
     setContractVerified(true);
+    if (estId) updateEstablishmentStage(estId, "completed");
     setLoading(false);
   };
 
@@ -220,7 +241,6 @@ const EstablishCompany = () => {
     </div>
   );
 
-  // Get group progress for stepper
   const getGroupStatus = (groupSteps: string[]) => {
     const firstIdx = ALL_STEPS.indexOf(groupSteps[0] as WizardStep);
     const lastIdx = ALL_STEPS.indexOf(groupSteps[groupSteps.length - 1] as WizardStep);
@@ -257,7 +277,6 @@ const EstablishCompany = () => {
 
       {/* ═══════════════ PATH SELECTION STEPS ═══════════════ */}
 
-      {/* Step: Investment Type */}
       {step === "investment_type" && (
         <div className="space-y-4">
           <Card>
@@ -283,7 +302,6 @@ const EstablishCompany = () => {
         </div>
       )}
 
-      {/* Step: Activities */}
       {step === "activities" && (
         <div className="space-y-4">
           <Card>
@@ -313,7 +331,6 @@ const EstablishCompany = () => {
         </div>
       )}
 
-      {/* Step: Legal Form */}
       {step === "legal_form" && (
         <div className="space-y-4">
           <Card>
@@ -348,7 +365,6 @@ const EstablishCompany = () => {
         </div>
       )}
 
-      {/* Step: Incentives */}
       {step === "incentives" && (
         <div className="space-y-4">
           <Card>
@@ -385,7 +401,6 @@ const EstablishCompany = () => {
         </div>
       )}
 
-      {/* Step: Summary */}
       {step === "summary" && (
         <div className="space-y-4">
           <Card>
@@ -434,7 +449,6 @@ const EstablishCompany = () => {
 
       {/* ═══════════════ IDENTITY & ELIGIBILITY ═══════════════ */}
 
-      {/* Step: Identity Input */}
       {step === "identity" && (
         <div className="space-y-4">
           <Card>
@@ -491,7 +505,6 @@ const EstablishCompany = () => {
         </div>
       )}
 
-      {/* Step: Identity Verification */}
       {step === "identity_verify" && (
         <div className="space-y-4">
           <Card>
@@ -528,7 +541,6 @@ const EstablishCompany = () => {
         </div>
       )}
 
-      {/* Step: Eligibility */}
       {step === "eligibility" && (
         <div className="space-y-4">
           <Card>
@@ -568,7 +580,6 @@ const EstablishCompany = () => {
 
       {/* ═══════════════ NAME CHECK ═══════════════ */}
 
-      {/* Step: Name Check (auto legal compliance) */}
       {step === "name_check" && (
         <div className="space-y-4">
           <Card>
@@ -608,8 +619,8 @@ const EstablishCompany = () => {
                   )}
 
                   {nameStatus === "available" && nameLegalChecked && (
-                    <Button onClick={goNext} size="sm" className="mr-7 gap-2">
-                      إرسال للموظف للموافقة <ArrowLeft className="w-4 h-4" />
+                    <Button onClick={handleSubmitForNameApproval} size="sm" className="mr-7 gap-2">
+                      إرسال للجهة للموافقة <ArrowLeft className="w-4 h-4" />
                     </Button>
                   )}
                 </div>
@@ -619,32 +630,27 @@ const EstablishCompany = () => {
         </div>
       )}
 
-      {/* Step: Name Approval (employee simulation) */}
+      {/* Step: Name Approval — watches context for admin decision */}
       {step === "name_approval" && (
         <div className="space-y-4">
           <Card>
             <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-lg"><ClipboardCheck className="w-5 h-5" /> مراجعة الموظف — الاسم التجاري</CardTitle>
-              <CardDescription>الاسم المقترح: <strong>{companyName}</strong></CardDescription>
+              <CardTitle className="flex items-center gap-2 text-lg"><ClipboardCheck className="w-5 h-5" /> مراجعة الجهة — الاسم التجاري</CardTitle>
+              <CardDescription>الاسم المقترح: <strong>{companyName}</strong> {estId && <Badge variant="outline" className="mr-2 text-[10px]">{estId}</Badge>}</CardDescription>
             </CardHeader>
             <CardContent className="py-6">
-              {!nameEmployeeDecision ? (
+              {(!estRequest || estRequest.stage === "name_pending") ? (
                 <div className="text-center space-y-4">
                   <div className="w-16 h-16 rounded-full bg-amber-100 dark:bg-amber-950 flex items-center justify-center mx-auto">
                     <Clock className="w-8 h-8 text-amber-600" />
                   </div>
-                  <p className="font-semibold">في انتظار قرار الموظف</p>
-                  <p className="text-xs text-muted-foreground">محاكاة: اضغط أحد الأزرار التالية</p>
-                  <div className="flex gap-3 justify-center">
-                    <Button onClick={() => handleEmployeeNameDecision("approved")} disabled={loading} className="gap-2 bg-emerald-600 hover:bg-emerald-700">
-                      {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />} موافقة
-                    </Button>
-                    <Button onClick={() => handleEmployeeNameDecision("rejected")} disabled={loading} variant="destructive" className="gap-2">
-                      {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <XCircle className="w-4 h-4" />} رفض
-                    </Button>
+                  <p className="font-semibold">في انتظار قرار الجهة</p>
+                  <p className="text-xs text-muted-foreground">تم إرسال الطلب إلى لوحة الجهة — سيتم التحديث تلقائياً عند صدور القرار</p>
+                  <div className="p-3 rounded-lg bg-secondary text-xs text-muted-foreground">
+                    💡 انتقل إلى <button onClick={() => navigate("/admin")} className="text-primary underline font-medium">لوحة الجهة</button> للموافقة أو الرفض
                   </div>
                 </div>
-              ) : nameEmployeeDecision === "approved" ? (
+              ) : estRequest.stage === "name_approved" ? (
                 <div className="text-center space-y-4">
                   <div className="w-16 h-16 rounded-full bg-emerald-100 dark:bg-emerald-950 flex items-center justify-center mx-auto">
                     <CheckCircle2 className="w-8 h-8 text-emerald-600" />
@@ -667,8 +673,8 @@ const EstablishCompany = () => {
                     <XCircle className="w-8 h-8 text-destructive" />
                   </div>
                   <p className="font-bold text-destructive">تم رفض الاسم التجاري</p>
-                  <p className="text-xs text-muted-foreground">يمكنك العودة واختيار اسم آخر</p>
-                  <Button variant="outline" onClick={() => { setNameEmployeeDecision(null); setNameStatus(null); setNameLegalChecked(false); goTo("name_check"); }} className="gap-2">
+                  <p className="text-xs text-muted-foreground">يمكنك تجربة اسم آخر</p>
+                  <Button variant="outline" onClick={() => { setNameStatus(null); setNameLegalChecked(false); setCompanyName(""); setEstId(null); goTo("name_check"); }} className="gap-2">
                     <ArrowRight className="w-4 h-4" /> اختيار اسم آخر
                   </Button>
                 </div>
@@ -684,19 +690,14 @@ const EstablishCompany = () => {
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-lg"><CreditCard className="w-5 h-5" /> سداد رسوم حجز الاسم</CardTitle>
-              <CardDescription>سداد 100 ج.م لتأكيد حجز الاسم التجاري لمدة 15 يوم</CardDescription>
+              <CardDescription>سداد رسوم الحجز لتأكيد حجز الاسم لمدة 15 يوم</CardDescription>
             </CardHeader>
             <CardContent className="py-6">
               {!nameReservationPaid ? (
                 <div className="text-center space-y-4">
                   <div className="p-4 rounded-xl bg-secondary max-w-xs mx-auto">
-                    <div className="flex justify-between text-sm">
-                      <span className="text-muted-foreground">الاسم</span>
-                      <span className="font-semibold">{companyName}</span>
-                    </div>
-                    <Separator className="my-2" />
-                    <div className="flex justify-between font-bold">
-                      <span>رسوم الحجز</span>
+                    <div className="flex justify-between text-sm mb-2">
+                      <span className="text-muted-foreground">رسوم حجز الاسم</span>
                       <span className="text-primary">100 ج.م</span>
                     </div>
                   </div>
@@ -724,7 +725,6 @@ const EstablishCompany = () => {
 
       {/* ═══════════════ CONTRACT ═══════════════ */}
 
-      {/* Step: Contract Data Entry */}
       {step === "contract" && (
         <div className="space-y-4">
           <Card>
@@ -801,7 +801,6 @@ const EstablishCompany = () => {
             </CardContent>
           </Card>
 
-          {/* Contract Preview */}
           <Card>
             <CardHeader className="cursor-pointer" onClick={() => setContractPreview(!contractPreview)}>
               <CardTitle className="flex items-center gap-2 text-base">
@@ -823,41 +822,33 @@ const EstablishCompany = () => {
             )}
           </Card>
 
-          <Button onClick={goNext} disabled={founders.some(f => !f.name || !f.nationalId)} size="lg" className="w-full gap-2">
-            <Send className="w-4 h-4" /> إرسال العقد للمراجعة
+          <Button onClick={handleSubmitContractForReview} disabled={founders.some(f => !f.name || !f.nationalId)} size="lg" className="w-full gap-2">
+            <Send className="w-4 h-4" /> إرسال العقد للجهة للمراجعة
           </Button>
         </div>
       )}
 
-      {/* Step: Contract Review (employee) */}
+      {/* Step: Contract Review — watches context for admin decision */}
       {step === "contract_review" && (
         <div className="space-y-4">
           <Card>
             <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-lg"><ClipboardCheck className="w-5 h-5" /> مراجعة الموظف — العقد</CardTitle>
-              <CardDescription>مراجعة نموذج العقد والمستندات من قبل الجهة المختصة</CardDescription>
+              <CardTitle className="flex items-center gap-2 text-lg"><ClipboardCheck className="w-5 h-5" /> مراجعة الجهة — العقد</CardTitle>
+              <CardDescription>مراجعة نموذج العقد والمستندات من قبل الجهة المختصة {estId && <Badge variant="outline" className="mr-2 text-[10px]">{estId}</Badge>}</CardDescription>
             </CardHeader>
             <CardContent className="py-6">
-              {!contractEmployeeDecision ? (
+              {(!estRequest || estRequest.stage === "contract_pending") ? (
                 <div className="text-center space-y-4">
                   <div className="w-16 h-16 rounded-full bg-amber-100 dark:bg-amber-950 flex items-center justify-center mx-auto">
                     <Clock className="w-8 h-8 text-amber-600" />
                   </div>
-                  <p className="font-semibold">في انتظار مراجعة الموظف</p>
-                  <p className="text-xs text-muted-foreground">محاكاة: اختر قرار الموظف</p>
-                  <div className="flex flex-wrap gap-3 justify-center">
-                    <Button onClick={() => handleContractEmployeeDecision("approved")} disabled={loading} className="gap-2 bg-emerald-600 hover:bg-emerald-700">
-                      {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />} موافقة
-                    </Button>
-                    <Button onClick={() => handleContractEmployeeDecision("docs_requested")} disabled={loading} variant="outline" className="gap-2">
-                      {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <AlertTriangle className="w-4 h-4" />} طلب مستندات
-                    </Button>
-                    <Button onClick={() => handleContractEmployeeDecision("rejected")} disabled={loading} variant="destructive" className="gap-2">
-                      {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <XCircle className="w-4 h-4" />} رفض
-                    </Button>
+                  <p className="font-semibold">في انتظار مراجعة الجهة</p>
+                  <p className="text-xs text-muted-foreground">تم إرسال العقد إلى لوحة الجهة — سيتم التحديث تلقائياً عند صدور القرار</p>
+                  <div className="p-3 rounded-lg bg-secondary text-xs text-muted-foreground">
+                    💡 انتقل إلى <button onClick={() => navigate("/admin")} className="text-primary underline font-medium">لوحة الجهة</button> للموافقة أو الرفض
                   </div>
                 </div>
-              ) : contractEmployeeDecision === "approved" ? (
+              ) : estRequest.stage === "contract_approved" ? (
                 <div className="text-center space-y-4">
                   <div className="w-16 h-16 rounded-full bg-emerald-100 dark:bg-emerald-950 flex items-center justify-center mx-auto">
                     <CheckCircle2 className="w-8 h-8 text-emerald-600" />
@@ -868,33 +859,33 @@ const EstablishCompany = () => {
                     <PenTool className="w-4 h-4" /> الانتقال للتوقيع
                   </Button>
                 </div>
-              ) : contractEmployeeDecision === "docs_requested" ? (
+              ) : estRequest.stage === "contract_docs_requested" ? (
                 <div className="text-center space-y-4">
                   <div className="w-16 h-16 rounded-full bg-amber-100 dark:bg-amber-950 flex items-center justify-center mx-auto">
                     <AlertTriangle className="w-8 h-8 text-amber-600" />
                   </div>
                   <p className="font-bold text-amber-600">مطلوب مستندات إضافية</p>
                   <div className="p-3 rounded-lg bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 max-w-xs mx-auto text-right">
-                    {requestedDocs.map((doc, i) => (
+                    {estRequest.requestedDocs.map((doc, i) => (
                       <p key={i} className="text-sm">• {doc}</p>
                     ))}
                   </div>
-                  <Button variant="outline" onClick={() => { setContractEmployeeDecision(null); goTo("contract"); }} className="gap-2">
+                  <Button variant="outline" onClick={() => { if (estId) updateEstablishmentStage(estId, "contract_pending"); goTo("contract"); }} className="gap-2">
                     <ArrowRight className="w-4 h-4" /> العودة لتعديل العقد
                   </Button>
                 </div>
-              ) : (
+              ) : estRequest.stage === "contract_rejected" ? (
                 <div className="text-center space-y-4">
                   <div className="w-16 h-16 rounded-full bg-destructive/10 flex items-center justify-center mx-auto">
                     <XCircle className="w-8 h-8 text-destructive" />
                   </div>
                   <p className="font-bold text-destructive">تم رفض العقد</p>
                   <p className="text-xs text-muted-foreground">يمكنك تعديل البيانات وإعادة الإرسال</p>
-                  <Button variant="outline" onClick={() => { setContractEmployeeDecision(null); goTo("contract"); }} className="gap-2">
+                  <Button variant="outline" onClick={() => { if (estId) updateEstablishmentStage(estId, "contract_pending"); goTo("contract"); }} className="gap-2">
                     <ArrowRight className="w-4 h-4" /> تعديل العقد
                   </Button>
                 </div>
-              )}
+              ) : null}
             </CardContent>
           </Card>
         </div>
