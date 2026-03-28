@@ -42,9 +42,9 @@ const AppHeader = () => {
                 <span className="flex items-center gap-1.5">
                   <Bell className="w-4 h-4" />
                   <span className="hidden sm:inline">{item.label}</span>
-                  {notifCount > 0 && (
+                  {unreadCount > 0 && (
                     <Badge variant="destructive" className="text-[10px] h-5 min-w-5 flex items-center justify-center p-0">
-                      {notifCount}
+                      {unreadCount}
                     </Badge>
                   )}
                 </span>
