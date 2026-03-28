@@ -13,8 +13,7 @@ const navItems = [
 
 const AppHeader = () => {
   const location = useLocation();
-  const { currentRequest } = useApp();
-  const notifCount = currentRequest?.notifications.length ?? 0;
+  const { unreadCount } = useApp();
 
   return (
     <header className="border-b bg-card shadow-sm sticky top-0 z-50">
