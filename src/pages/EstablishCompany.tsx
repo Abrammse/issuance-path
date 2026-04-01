@@ -1,6 +1,7 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useApp } from "@/context/AppContext";
+import { useJsc, WORKFLOW, type JscShareholder } from "@/context/JscContext";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9,41 +10,38 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import {
   CheckCircle2, Loader2, MapPin, Layers, Scale, Gift,
-  Search, FileText, PenTool, CreditCard, ArrowLeft, ArrowRight,
-  ChevronLeft, Building2, Plus, Trash2, Eye, ChevronDown, ChevronUp,
-  User, ShieldCheck, ClipboardCheck, Clock, XCircle, AlertTriangle,
-  FileCheck, Send, Truck, Monitor, Award
+  Search, FileText, ArrowLeft, ArrowRight,
+  Building2, Plus, Trash2, ChevronDown, ChevronUp,
+  Monitor, Truck, XCircle, FileCheck, Send, Award
 } from "lucide-react";
 import {
   investmentTypes, eisicActivities, legalForms, incentives,
   checkNameAvailability, calculateContractFees,
-  type ActivityLevel, type NameStatus, type Founder, type LegalForm
+  type ActivityLevel, type NameStatus, type Founder
 } from "@/data/establishmentData";
 
 type WizardStep =
   | "investment_type" | "activities" | "legal_form" | "incentives" | "summary"
-  | "identity" | "identity_verify" | "eligibility"
-  | "name_check" | "name_approval" | "name_payment"
-  | "contract" | "contract_review" | "contract_sign" | "contract_verify"
+  | "applicant" | "shareholders"
+  | "name_check"
+  | "submit_review"
   | "done";
-
-type OutputType = "digital" | "printed";
 
 const STEPPER_GROUPS = [
   { label: "المسار", steps: ["investment_type", "activities", "legal_form", "incentives", "summary"] },
-  { label: "الهوية", steps: ["identity", "identity_verify", "eligibility"] },
-  { label: "الاسم", steps: ["name_check", "name_approval", "name_payment"] },
-  { label: "العقد", steps: ["contract", "contract_review", "contract_sign", "contract_verify"] },
+  { label: "البيانات", steps: ["applicant", "shareholders"] },
+  { label: "الاسم", steps: ["name_check"] },
+  { label: "التقديم", steps: ["submit_review"] },
 ];
 
 const ALL_STEPS: WizardStep[] = STEPPER_GROUPS.flatMap(g => g.steps) as WizardStep[];
 
 const EstablishCompany = () => {
   const navigate = useNavigate();
-  const { submitEstablishment, getEstablishment, updateEstablishmentStage, establishmentRequests } = useApp();
+  const { submitEstablishment } = useApp();
+  const { submitJscRequest } = useJsc();
   const [step, setStep] = useState<WizardStep>("investment_type");
   const [loading, setLoading] = useState(false);
-  const [estId, setEstId] = useState<string | null>(null);
 
   // Path selection
   const [selectedInvestment, setSelectedInvestment] = useState("");
@@ -52,58 +50,40 @@ const EstablishCompany = () => {
   const [selectedLegalForm, setSelectedLegalForm] = useState("");
   const [selectedIncentives, setSelectedIncentives] = useState<Set<string>>(new Set());
 
-  // Identity
+  // Applicant
   const [applicantName, setApplicantName] = useState("");
   const [applicantNationalId, setApplicantNationalId] = useState("");
-  const [outputType, setOutputType] = useState<OutputType>("digital");
-  const [identityVerified, setIdentityVerified] = useState(false);
-  const [eligibilityChecked, setEligibilityChecked] = useState(false);
+  const [outputType, setOutputType] = useState<"digital" | "printed">("digital");
 
-  // Name check
+  // Shareholders (for joint_stock)
+  const [shareholders, setShareholders] = useState<JscShareholder[]>([
+    { id: "s1", name: "", nationalId: "", nationality: "مصري", shareCount: 100, shareValue: 10, role: "chairman", eligible: false },
+  ]);
+
+  // Name
   const [companyName, setCompanyName] = useState("");
   const [nameStatus, setNameStatus] = useState<NameStatus | null>(null);
   const [nameMessage, setNameMessage] = useState("");
   const [nameLegalChecked, setNameLegalChecked] = useState(false);
-  const [nameReservationPaid, setNameReservationPaid] = useState(false);
 
-  // Contract
+  // Contract data
   const [founders, setFounders] = useState<Founder[]>([
     { id: "f1", name: "", nationalId: "", sharePercentage: 100, role: "founder" },
   ]);
   const [accountant, setAccountant] = useState({ name: "", regNumber: "" });
   const [lawyer, setLawyer] = useState({ name: "", regNumber: "" });
-  const [capital, setCapital] = useState<number>(50000);
-  const [contractPreview, setContractPreview] = useState(false);
-  const [signed, setSigned] = useState(false);
-  const [contractVerified, setContractVerified] = useState(false);
+  const [capital, setCapital] = useState<number>(250000);
 
-  // Get current establishment request from context
-  const estRequest = estId ? getEstablishment(estId) : undefined;
-
-  // Watch for admin decisions on name/contract
-  useEffect(() => {
-    if (!estRequest) return;
-    // Auto-advance when admin approves name while on name_approval step
-    if (step === "name_approval" && estRequest.stage === "name_approved") {
-      // Already showing approved state
-    }
-    if (step === "name_approval" && estRequest.stage === "name_rejected") {
-      // Already showing rejected state
-    }
-  }, [estRequest, step]);
-
+  const isJointStock = selectedLegalForm === "joint_stock";
   const currentIdx = ALL_STEPS.indexOf(step);
-  const goTo = (s: WizardStep) => setStep(s);
   const goNext = () => {
     const next = currentIdx + 1;
     if (next < ALL_STEPS.length) setStep(ALL_STEPS[next]);
     else setStep("done");
   };
-  const goPrev = () => {
-    if (currentIdx > 0) setStep(ALL_STEPS[currentIdx - 1]);
-  };
+  const goPrev = () => { if (currentIdx > 0) setStep(ALL_STEPS[currentIdx - 1]); };
 
-  // Activity tree
+  // Activity tree helpers
   const toggleExpand = (id: string) => {
     setExpandedActivities(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
   };
@@ -123,23 +103,30 @@ const EstablishCompany = () => {
   const chosenInvestment = investmentTypes.find(i => i.id === selectedInvestment);
   const fees = chosenLegalForm ? calculateContractFees(capital, chosenLegalForm.id) : null;
 
-  // Simulate identity verification
-  const handleIdentityVerify = async () => {
+  // Shareholders
+  const addShareholder = () => setShareholders(prev => [...prev, {
+    id: `s${Date.now()}`, name: "", nationalId: "", nationality: "مصري",
+    shareCount: 0, shareValue: 10, role: "founder", eligible: false,
+  }]);
+  const removeShareholder = (id: string) => setShareholders(prev => prev.filter(s => s.id !== id));
+  const updateShareholder = (id: string, field: keyof JscShareholder, value: any) => {
+    setShareholders(prev => prev.map(s => s.id === id ? { ...s, [field]: value } : s));
+  };
+  const checkEligibility = async (id: string) => {
     setLoading(true);
-    await new Promise(r => setTimeout(r, 2500));
-    setIdentityVerified(true);
+    await new Promise(r => setTimeout(r, 1500));
+    updateShareholder(id, "eligible", true);
     setLoading(false);
   };
 
-  // Simulate eligibility
-  const handleEligibilityCheck = async () => {
-    setLoading(true);
-    await new Promise(r => setTimeout(r, 2000));
-    setEligibilityChecked(true);
-    setLoading(false);
+  // Non-JSC founders
+  const addFounder = () => setFounders(prev => [...prev, { id: `f${Date.now()}`, name: "", nationalId: "", sharePercentage: 0, role: "founder" }]);
+  const removeFounder = (id: string) => setFounders(prev => prev.filter(f => f.id !== id));
+  const updateFounder = (id: string, field: keyof Founder, value: string | number) => {
+    setFounders(prev => prev.map(f => f.id === id ? { ...f, [field]: value } : f));
   };
 
-  // Name check (auto legal)
+  // Name check
   const handleNameCheck = async () => {
     if (!companyName.trim()) return;
     setLoading(true);
@@ -155,61 +142,36 @@ const EstablishCompany = () => {
     setLoading(false);
   };
 
-  // Submit to admin for name approval
-  const handleSubmitForNameApproval = () => {
-    const est = submitEstablishment({
-      applicantName,
-      applicantNationalId,
-      companyName,
-      legalForm: selectedLegalForm,
-      investmentType: selectedInvestment,
-      activities: Array.from(selectedActivities),
-      capital,
-      outputType,
-      founders: founders.map(f => ({ name: f.name, nationalId: f.nationalId, sharePercentage: f.sharePercentage, role: f.role })),
-    });
-    setEstId(est.id);
-    goNext();
-  };
-
-  // Pay name reservation
-  const handlePayNameReservation = async () => {
-    setLoading(true);
-    await new Promise(r => setTimeout(r, 2000));
-    setNameReservationPaid(true);
-    setLoading(false);
-  };
-
-  // Submit contract for review
-  const handleSubmitContractForReview = () => {
-    if (estId) {
-      updateEstablishmentStage(estId, "contract_pending");
+  // Submit
+  const handleSubmit = () => {
+    if (isJointStock) {
+      submitJscRequest({
+        companyName,
+        legalForm: selectedLegalForm,
+        investmentType: selectedInvestment,
+        activities: Array.from(selectedActivities),
+        capital,
+        outputType,
+        applicantName,
+        applicantNationalId,
+        shareholders,
+        accountant,
+        lawyer,
+      });
+    } else {
+      submitEstablishment({
+        applicantName,
+        applicantNationalId,
+        companyName,
+        legalForm: selectedLegalForm,
+        investmentType: selectedInvestment,
+        activities: Array.from(selectedActivities),
+        capital,
+        outputType,
+        founders: founders.map(f => ({ name: f.name, nationalId: f.nationalId, sharePercentage: f.sharePercentage, role: f.role })),
+      });
     }
-    goNext();
-  };
-
-  // Sign contract
-  const handleSign = async () => {
-    setLoading(true);
-    await new Promise(r => setTimeout(r, 2500));
-    setSigned(true);
-    setLoading(false);
-  };
-
-  // Verify contract
-  const handleVerifyContract = async () => {
-    setLoading(true);
-    await new Promise(r => setTimeout(r, 3000));
-    setContractVerified(true);
-    if (estId) updateEstablishmentStage(estId, "completed");
-    setLoading(false);
-  };
-
-  // Founders
-  const addFounder = () => setFounders(prev => [...prev, { id: `f${Date.now()}`, name: "", nationalId: "", sharePercentage: 0, role: "founder" }]);
-  const removeFounder = (id: string) => setFounders(prev => prev.filter(f => f.id !== id));
-  const updateFounder = (id: string, field: keyof Founder, value: string | number) => {
-    setFounders(prev => prev.map(f => f.id === id ? { ...f, [field]: value } : f));
+    setStep("done");
   };
 
   // Render activity tree
@@ -275,20 +237,20 @@ const EstablishCompany = () => {
         </div>
       )}
 
-      {/* ═══════════════ PATH SELECTION STEPS ═══════════════ */}
+      {/* ═══════════ PATH SELECTION ═══════════ */}
 
       {step === "investment_type" && (
         <div className="space-y-4">
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-lg"><MapPin className="w-5 h-5" /> اختر نوع الاستثمار</CardTitle>
-              <CardDescription>حدد المنطقة أو نوع الاستثمار لتحديد الإجراءات والحوافز المتاحة</CardDescription>
+              <CardDescription>حدد المنطقة أو نوع الاستثمار</CardDescription>
             </CardHeader>
             <CardContent className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               {investmentTypes.map(t => (
                 <button key={t.id} type="button" onClick={() => setSelectedInvestment(t.id)}
                   className={`p-4 rounded-xl border-2 text-right transition-all ${
-                    selectedInvestment === t.id ? "border-primary bg-primary/5 shadow-sm" : "border-border hover:border-muted-foreground/30"
+                    selectedInvestment === t.id ? "border-primary bg-primary/5" : "border-border hover:border-muted-foreground/30"
                   }`}>
                   <p className="font-semibold text-sm">{t.label}</p>
                   <p className="text-xs text-muted-foreground mt-1">{t.description}</p>
@@ -307,7 +269,7 @@ const EstablishCompany = () => {
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-lg"><Layers className="w-5 h-5" /> اختر الأنشطة الاقتصادية</CardTitle>
-              <CardDescription>تصنيف EISIC — اختر مستوى واحد أو أكثر (المستوى الرابع)</CardDescription>
+              <CardDescription>تصنيف EISIC — اختر مستوى واحد أو أكثر</CardDescription>
             </CardHeader>
             <CardContent>
               {selectedActivities.size > 0 && (
@@ -341,7 +303,7 @@ const EstablishCompany = () => {
               {legalForms.map(f => (
                 <button key={f.id} type="button" onClick={() => setSelectedLegalForm(f.id)}
                   className={`w-full flex items-start gap-4 p-4 rounded-xl border-2 text-right transition-all ${
-                    selectedLegalForm === f.id ? "border-primary bg-primary/5 shadow-sm" : "border-border hover:border-muted-foreground/30"
+                    selectedLegalForm === f.id ? "border-primary bg-primary/5" : "border-border hover:border-muted-foreground/30"
                   }`}>
                   <div className="flex-1">
                     <p className="font-semibold text-sm">{f.label}</p>
@@ -406,13 +368,9 @@ const EstablishCompany = () => {
           <Card>
             <CardHeader>
               <CardTitle className="text-lg">ملخص المتطلبات</CardTitle>
-              <CardDescription>مراجعة اختياراتك قبل التحقق من الهوية</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div>
-                <p className="text-xs text-muted-foreground mb-1">نوع الاستثمار</p>
-                <p className="font-semibold text-sm">{chosenInvestment?.label}</p>
-              </div>
+              <div><p className="text-xs text-muted-foreground mb-1">نوع الاستثمار</p><p className="font-semibold text-sm">{chosenInvestment?.label}</p></div>
               <Separator />
               <div>
                 <p className="text-xs text-muted-foreground mb-1">الأنشطة ({selectedActivities.size})</p>
@@ -423,10 +381,15 @@ const EstablishCompany = () => {
                 </div>
               </div>
               <Separator />
-              <div>
-                <p className="text-xs text-muted-foreground mb-1">الشكل القانوني</p>
-                <p className="font-semibold text-sm">{chosenLegalForm?.label}</p>
-              </div>
+              <div><p className="text-xs text-muted-foreground mb-1">الشكل القانوني</p><p className="font-semibold text-sm">{chosenLegalForm?.label}</p></div>
+              {isJointStock && (
+                <>
+                  <Separator />
+                  <div className="p-3 rounded-lg bg-primary/5 border border-primary/20">
+                    <p className="text-sm font-medium text-primary">⚡ شركة مساهمة — سيتم تفعيل نظام الجهات الحكومية المتكامل (11 جهة)</p>
+                  </div>
+                </>
+              )}
               <Separator />
               <div className="grid grid-cols-2 gap-4">
                 <div className="p-3 rounded-lg bg-secondary">
@@ -435,26 +398,25 @@ const EstablishCompany = () => {
                 </div>
                 <div className="p-3 rounded-lg bg-secondary">
                   <p className="text-xs text-muted-foreground">الوقت المتوقع</p>
-                  <p className="text-lg font-bold text-primary">5-10 أيام</p>
+                  <p className="text-lg font-bold text-primary">{isJointStock ? "15-30 يوم" : "5-10 أيام"}</p>
                 </div>
               </div>
             </CardContent>
           </Card>
           <div className="flex gap-3">
             <Button variant="outline" onClick={goPrev} className="gap-2"><ArrowRight className="w-4 h-4" /> السابق</Button>
-            <Button onClick={goNext} size="lg" className="flex-1 gap-2">التالي — التحقق من الهوية <ArrowLeft className="w-4 h-4" /></Button>
+            <Button onClick={goNext} size="lg" className="flex-1 gap-2">التالي — بيانات مقدم الطلب <ArrowLeft className="w-4 h-4" /></Button>
           </div>
         </div>
       )}
 
-      {/* ═══════════════ IDENTITY & ELIGIBILITY ═══════════════ */}
+      {/* ═══════════ APPLICANT DATA ═══════════ */}
 
-      {step === "identity" && (
+      {step === "applicant" && (
         <div className="space-y-4">
           <Card>
             <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-lg"><User className="w-5 h-5" /> بيانات مقدم الطلب</CardTitle>
-              <CardDescription>أدخل بياناتك للتحقق من الهوية الرقمية عبر منصة مصر الرقمية</CardDescription>
+              <CardTitle className="text-lg">بيانات مقدم الطلب</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="space-y-2">
@@ -476,9 +438,6 @@ const EstablishCompany = () => {
                       <p className="font-semibold text-sm">ملف رقمي</p>
                       <p className="text-xs text-muted-foreground mt-1">استلام المخرجات إلكترونياً عبر المنصة</p>
                     </div>
-                    <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 ${outputType === "digital" ? "border-primary" : "border-muted-foreground/40"}`}>
-                      {outputType === "digital" && <div className="w-2.5 h-2.5 rounded-full bg-primary" />}
-                    </div>
                   </button>
                   <button type="button" onClick={() => setOutputType("printed")}
                     className={`flex items-start gap-3 p-4 rounded-xl border-2 text-right transition-all ${outputType === "printed" ? "border-primary bg-primary/5" : "border-border hover:border-muted-foreground/30"}`}>
@@ -486,99 +445,155 @@ const EstablishCompany = () => {
                     <div className="flex-1">
                       <p className="font-semibold text-sm">ملف مطبوع مع التوصيل</p>
                       <p className="text-xs text-muted-foreground mt-1">توصيل عبر البريد المصري — رسوم إضافية 50 ج.م</p>
-                      <Badge variant="outline" className="mt-2 text-[10px]">تكامل البريد المصري</Badge>
-                    </div>
-                    <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 ${outputType === "printed" ? "border-primary" : "border-muted-foreground/40"}`}>
-                      {outputType === "printed" && <div className="w-2.5 h-2.5 rounded-full bg-primary" />}
                     </div>
                   </button>
                 </div>
               </div>
+
+              {!isJointStock && (
+                <>
+                  <Separator />
+                  <div className="space-y-2">
+                    <Label>رأس المال (ج.م)</Label>
+                    <Input type="number" value={capital} onChange={e => setCapital(Number(e.target.value))} min={chosenLegalForm?.minCapital || 0} />
+                  </div>
+                </>
+              )}
             </CardContent>
           </Card>
           <div className="flex gap-3">
             <Button variant="outline" onClick={goPrev} className="gap-2"><ArrowRight className="w-4 h-4" /> السابق</Button>
             <Button onClick={goNext} disabled={!applicantName.trim() || applicantNationalId.length < 14} size="lg" className="flex-1 gap-2">
-              التالي — التحقق من الهوية <ArrowLeft className="w-4 h-4" />
+              التالي <ArrowLeft className="w-4 h-4" />
             </Button>
           </div>
         </div>
       )}
 
-      {step === "identity_verify" && (
+      {/* ═══════════ SHAREHOLDERS (JSC) / FOUNDERS (other) ═══════════ */}
+
+      {step === "shareholders" && (
         <div className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-lg"><ShieldCheck className="w-5 h-5" /> التحقق من الهوية الرقمية</CardTitle>
-              <CardDescription>جاري التحقق عبر منصة مصر الرقمية</CardDescription>
-            </CardHeader>
-            <CardContent className="py-8">
-              {!identityVerified ? (
-                <div className="text-center space-y-4">
-                  <div className="w-16 h-16 rounded-full bg-secondary flex items-center justify-center mx-auto">
-                    <ShieldCheck className="w-8 h-8 text-muted-foreground" />
-                  </div>
-                  <div>
-                    <p className="font-semibold">{applicantName}</p>
-                    <p className="text-sm text-muted-foreground">الرقم القومي: {applicantNationalId}</p>
-                  </div>
-                  <Button onClick={handleIdentityVerify} disabled={loading} size="lg" className="gap-2">
-                    {loading ? <><Loader2 className="w-4 h-4 animate-spin" /> جاري التحقق...</> : <><ShieldCheck className="w-4 h-4" /> بدء التحقق</>}
-                  </Button>
+          {isJointStock ? (
+            // JSC: Full shareholder management with eligibility
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg">المساهمون — شركة مساهمة</CardTitle>
+                <CardDescription>أدخل بيانات جميع المساهمين مع التحقق من الأهلية لكل مساهم</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="space-y-2">
+                  <Label>رأس المال (ج.م)</Label>
+                  <Input type="number" value={capital} onChange={e => setCapital(Number(e.target.value))} min={250000} />
+                  {capital < 250000 && <p className="text-destructive text-xs">الحد الأدنى لشركة المساهمة: 250,000 ج.م</p>}
                 </div>
-              ) : (
-                <div className="text-center space-y-4">
-                  <div className="w-16 h-16 rounded-full bg-emerald-100 dark:bg-emerald-950 flex items-center justify-center mx-auto">
-                    <CheckCircle2 className="w-8 h-8 text-emerald-600" />
-                  </div>
-                  <p className="font-bold text-emerald-600">تم التحقق من الهوية بنجاح</p>
-                  <p className="text-xs text-muted-foreground">تم مطابقة البيانات مع قاعدة بيانات الأحوال المدنية</p>
-                  <Button onClick={goNext} size="lg" className="gap-2">التالي — فحص الأهلية <ArrowLeft className="w-4 h-4" /></Button>
+                <Separator />
+                <div className="flex items-center justify-between">
+                  <Label className="text-base font-semibold">المساهمون ({shareholders.length})</Label>
+                  <Button variant="outline" size="sm" onClick={addShareholder} className="gap-1"><Plus className="w-3.5 h-3.5" /> إضافة مساهم</Button>
                 </div>
-              )}
-            </CardContent>
-          </Card>
+                {shareholders.map((s, idx) => (
+                  <div key={s.id} className="p-3 rounded-lg border space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-medium text-muted-foreground">مساهم {idx + 1}</span>
+                      <div className="flex items-center gap-2">
+                        {s.eligible && <Badge variant="default" className="text-[10px]">✓ مؤهل</Badge>}
+                        {shareholders.length > 1 && (
+                          <Button variant="ghost" size="sm" onClick={() => removeShareholder(s.id)} className="h-7 w-7 p-0 text-destructive"><Trash2 className="w-3.5 h-3.5" /></Button>
+                        )}
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <Input placeholder="الاسم الكامل" value={s.name} onChange={e => updateShareholder(s.id, "name", e.target.value)} />
+                      <Input placeholder="الرقم القومي" value={s.nationalId} onChange={e => updateShareholder(s.id, "nationalId", e.target.value)} />
+                    </div>
+                    <div className="grid grid-cols-3 gap-2">
+                      <Input placeholder="الجنسية" value={s.nationality} onChange={e => updateShareholder(s.id, "nationality", e.target.value)} />
+                      <Input type="number" placeholder="عدد الأسهم" value={s.shareCount || ""} onChange={e => updateShareholder(s.id, "shareCount", Number(e.target.value))} />
+                      <Input type="number" placeholder="قيمة السهم" value={s.shareValue || ""} onChange={e => updateShareholder(s.id, "shareValue", Number(e.target.value))} />
+                    </div>
+                    <div className="flex gap-2 items-center">
+                      <select value={s.role} onChange={e => updateShareholder(s.id, "role", e.target.value)}
+                        className="flex h-10 flex-1 rounded-md border border-input bg-background px-3 py-2 text-sm">
+                        <option value="founder">مؤسس</option>
+                        <option value="board_member">عضو مجلس إدارة</option>
+                        <option value="chairman">رئيس مجلس إدارة</option>
+                      </select>
+                      {!s.eligible && (
+                        <Button variant="outline" size="sm" onClick={() => checkEligibility(s.id)}
+                          disabled={loading || !s.name || !s.nationalId} className="gap-1 shrink-0">
+                          {loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle2 className="w-3.5 h-3.5" />}
+                          تحقق من الأهلية
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+
+                <Separator />
+                <div className="grid sm:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label className="font-semibold">المحاسب القانوني</Label>
+                    <Input placeholder="اسم المحاسب" value={accountant.name} onChange={e => setAccountant(p => ({ ...p, name: e.target.value }))} />
+                    <Input placeholder="رقم القيد" value={accountant.regNumber} onChange={e => setAccountant(p => ({ ...p, regNumber: e.target.value }))} />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="font-semibold">المستشار القانوني</Label>
+                    <Input placeholder="اسم المحامي" value={lawyer.name} onChange={e => setLawyer(p => ({ ...p, name: e.target.value }))} />
+                    <Input placeholder="رقم القيد" value={lawyer.regNumber} onChange={e => setLawyer(p => ({ ...p, regNumber: e.target.value }))} />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          ) : (
+            // Non-JSC: Simple founders
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg">المؤسسون — {chosenLegalForm?.label}</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <Label className="text-base font-semibold">المؤسسون</Label>
+                  <Button variant="outline" size="sm" onClick={addFounder} className="gap-1"><Plus className="w-3.5 h-3.5" /> إضافة</Button>
+                </div>
+                {founders.map((f, idx) => (
+                  <div key={f.id} className="p-3 rounded-lg border space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-medium text-muted-foreground">مؤسس {idx + 1}</span>
+                      {founders.length > 1 && <Button variant="ghost" size="sm" onClick={() => removeFounder(f.id)} className="h-7 w-7 p-0 text-destructive"><Trash2 className="w-3.5 h-3.5" /></Button>}
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <Input placeholder="الاسم الكامل" value={f.name} onChange={e => updateFounder(f.id, "name", e.target.value)} />
+                      <Input placeholder="الرقم القومي" value={f.nationalId} onChange={e => updateFounder(f.id, "nationalId", e.target.value)} />
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <Input type="number" placeholder="نسبة الحصة %" value={f.sharePercentage || ""} onChange={e => updateFounder(f.id, "sharePercentage", Number(e.target.value))} />
+                      <select value={f.role} onChange={e => updateFounder(f.id, "role", e.target.value as Founder["role"])}
+                        className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm">
+                        <option value="founder">مؤسس</option>
+                        <option value="manager">مدير</option>
+                        <option value="board_member">عضو مجلس إدارة</option>
+                      </select>
+                    </div>
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
+          )}
+          <div className="flex gap-3">
+            <Button variant="outline" onClick={goPrev} className="gap-2"><ArrowRight className="w-4 h-4" /> السابق</Button>
+            <Button onClick={goNext} disabled={
+              isJointStock
+                ? shareholders.some(s => !s.name || !s.nationalId || !s.eligible) || capital < 250000
+                : founders.some(f => !f.name || !f.nationalId)
+            } size="lg" className="flex-1 gap-2">
+              التالي — الاسم التجاري <ArrowLeft className="w-4 h-4" />
+            </Button>
+          </div>
         </div>
       )}
 
-      {step === "eligibility" && (
-        <div className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-lg"><ClipboardCheck className="w-5 h-5" /> التحقق من الأهلية</CardTitle>
-              <CardDescription>فحص أهلية مقدم الطلب للحصول على خدمة التأسيس</CardDescription>
-            </CardHeader>
-            <CardContent className="py-8">
-              {!eligibilityChecked ? (
-                <div className="text-center space-y-4">
-                  <div className="w-16 h-16 rounded-full bg-secondary flex items-center justify-center mx-auto">
-                    <ClipboardCheck className="w-8 h-8 text-muted-foreground" />
-                  </div>
-                  <div className="text-sm text-muted-foreground space-y-1">
-                    <p>✓ لا يوجد حظر قانوني على مقدم الطلب</p>
-                    <p>✓ التحقق من السجل التجاري السابق</p>
-                    <p>✓ مطابقة نوع الاستثمار مع الشروط</p>
-                  </div>
-                  <Button onClick={handleEligibilityCheck} disabled={loading} size="lg" className="gap-2">
-                    {loading ? <><Loader2 className="w-4 h-4 animate-spin" /> جاري الفحص...</> : <><ClipboardCheck className="w-4 h-4" /> بدء فحص الأهلية</>}
-                  </Button>
-                </div>
-              ) : (
-                <div className="text-center space-y-4">
-                  <div className="w-16 h-16 rounded-full bg-emerald-100 dark:bg-emerald-950 flex items-center justify-center mx-auto">
-                    <CheckCircle2 className="w-8 h-8 text-emerald-600" />
-                  </div>
-                  <p className="font-bold text-emerald-600">مؤهل للحصول على الخدمة</p>
-                  <p className="text-xs text-muted-foreground">تم التحقق من جميع شروط الأهلية بنجاح</p>
-                  <Button onClick={goNext} size="lg" className="gap-2">التالي — حجز الاسم التجاري <ArrowLeft className="w-4 h-4" /></Button>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </div>
-      )}
-
-      {/* ═══════════════ NAME CHECK ═══════════════ */}
+      {/* ═══════════ NAME CHECK ═══════════ */}
 
       {step === "name_check" && (
         <div className="space-y-4">
@@ -602,8 +617,7 @@ const EstablishCompany = () => {
                   nameStatus === "available" ? "border-emerald-500/50 bg-emerald-50 dark:bg-emerald-950/20" : "border-destructive/50 bg-destructive/5"
                 }`}>
                   <div className="flex items-center gap-2">
-                    {nameStatus === "available" ? <CheckCircle2 className="w-5 h-5 text-emerald-600" /> :
-                      <XCircle className="w-5 h-5 text-destructive" />}
+                    {nameStatus === "available" ? <CheckCircle2 className="w-5 h-5 text-emerald-600" /> : <XCircle className="w-5 h-5 text-destructive" />}
                     <p className="font-semibold text-sm">{nameStatus === "available" ? "الاسم متاح" : "الاسم غير متاح"}</p>
                   </div>
                   <p className="text-xs text-muted-foreground mr-7">{nameMessage}</p>
@@ -614,421 +628,111 @@ const EstablishCompany = () => {
                         <FileCheck className="w-4 h-4" />
                         <span className="text-sm font-medium">التحقق القانوني التلقائي: متوافق ✓</span>
                       </div>
-                      <p className="text-xs text-muted-foreground">لا يتعارض مع أسماء محظورة أو علامات تجارية مسجلة</p>
                     </div>
                   )}
-
-                  {nameStatus === "available" && nameLegalChecked && (
-                    <Button onClick={handleSubmitForNameApproval} size="sm" className="mr-7 gap-2">
-                      إرسال للجهة للموافقة <ArrowLeft className="w-4 h-4" />
-                    </Button>
-                  )}
                 </div>
               )}
             </CardContent>
           </Card>
+          <div className="flex gap-3">
+            <Button variant="outline" onClick={goPrev} className="gap-2"><ArrowRight className="w-4 h-4" /> السابق</Button>
+            <Button onClick={goNext} disabled={nameStatus !== "available" || !nameLegalChecked} size="lg" className="flex-1 gap-2">
+              التالي — مراجعة وتقديم <ArrowLeft className="w-4 h-4" />
+            </Button>
+          </div>
         </div>
       )}
 
-      {/* Step: Name Approval — watches context for admin decision */}
-      {step === "name_approval" && (
+      {/* ═══════════ SUBMIT REVIEW ═══════════ */}
+
+      {step === "submit_review" && (
         <div className="space-y-4">
           <Card>
             <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-lg"><ClipboardCheck className="w-5 h-5" /> مراجعة الجهة — الاسم التجاري</CardTitle>
-              <CardDescription>الاسم المقترح: <strong>{companyName}</strong> {estId && <Badge variant="outline" className="mr-2 text-[10px]">{estId}</Badge>}</CardDescription>
+              <CardTitle className="text-lg">مراجعة نهائية قبل التقديم</CardTitle>
             </CardHeader>
-            <CardContent className="py-6">
-              {(!estRequest || estRequest.stage === "name_pending") ? (
-                <div className="text-center space-y-4">
-                  <div className="w-16 h-16 rounded-full bg-amber-100 dark:bg-amber-950 flex items-center justify-center mx-auto">
-                    <Clock className="w-8 h-8 text-amber-600" />
-                  </div>
-                  <p className="font-semibold">في انتظار قرار الجهة</p>
-                  <p className="text-xs text-muted-foreground">تم إرسال الطلب إلى لوحة الجهة — سيتم التحديث تلقائياً عند صدور القرار</p>
-                  <div className="p-3 rounded-lg bg-secondary text-xs text-muted-foreground">
-                    💡 انتقل إلى <button onClick={() => navigate("/admin")} className="text-primary underline font-medium">لوحة الجهة</button> للموافقة أو الرفض
-                  </div>
-                </div>
-              ) : estRequest.stage === "name_approved" ? (
-                <div className="text-center space-y-4">
-                  <div className="w-16 h-16 rounded-full bg-emerald-100 dark:bg-emerald-950 flex items-center justify-center mx-auto">
-                    <CheckCircle2 className="w-8 h-8 text-emerald-600" />
-                  </div>
-                  <p className="font-bold text-emerald-600">تمت الموافقة على الاسم</p>
-                  <div className="p-3 rounded-lg bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800">
-                    <div className="flex items-center gap-2 text-amber-700 dark:text-amber-400">
-                      <Clock className="w-4 h-4" />
-                      <span className="text-sm font-medium">محجوز مؤقتاً لمدة 48 ساعة</span>
-                    </div>
-                    <p className="text-xs text-muted-foreground mt-1">يجب سداد رسوم الحجز خلال 48 ساعة لتأكيد الحجز لمدة 15 يوم</p>
-                  </div>
-                  <Button onClick={goNext} size="lg" className="gap-2">
-                    سداد رسوم الحجز <ArrowLeft className="w-4 h-4" />
-                  </Button>
-                </div>
-              ) : (
-                <div className="text-center space-y-4">
-                  <div className="w-16 h-16 rounded-full bg-destructive/10 flex items-center justify-center mx-auto">
-                    <XCircle className="w-8 h-8 text-destructive" />
-                  </div>
-                  <p className="font-bold text-destructive">تم رفض الاسم التجاري</p>
-                  <p className="text-xs text-muted-foreground">يمكنك تجربة اسم آخر</p>
-                  <Button variant="outline" onClick={() => { setNameStatus(null); setNameLegalChecked(false); setCompanyName(""); setEstId(null); goTo("name_check"); }} className="gap-2">
-                    <ArrowRight className="w-4 h-4" /> اختيار اسم آخر
-                  </Button>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </div>
-      )}
-
-      {/* Step: Name Payment */}
-      {step === "name_payment" && (
-        <div className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-lg"><CreditCard className="w-5 h-5" /> سداد رسوم حجز الاسم</CardTitle>
-              <CardDescription>سداد رسوم الحجز لتأكيد حجز الاسم لمدة 15 يوم</CardDescription>
-            </CardHeader>
-            <CardContent className="py-6">
-              {!nameReservationPaid ? (
-                <div className="text-center space-y-4">
-                  <div className="p-4 rounded-xl bg-secondary max-w-xs mx-auto">
-                    <div className="flex justify-between text-sm mb-2">
-                      <span className="text-muted-foreground">رسوم حجز الاسم</span>
-                      <span className="text-primary">100 ج.م</span>
-                    </div>
-                  </div>
-                  <Button onClick={handlePayNameReservation} disabled={loading} size="lg" className="gap-2">
-                    {loading ? <><Loader2 className="w-4 h-4 animate-spin" /> جاري السداد...</> : <><CreditCard className="w-4 h-4" /> سداد الآن</>}
-                  </Button>
-                </div>
-              ) : (
-                <div className="text-center space-y-4">
-                  <div className="w-16 h-16 rounded-full bg-emerald-100 dark:bg-emerald-950 flex items-center justify-center mx-auto">
-                    <CheckCircle2 className="w-8 h-8 text-emerald-600" />
-                  </div>
-                  <p className="font-bold text-emerald-600">تم السداد وتأكيد الحجز</p>
-                  <div className="p-3 rounded-lg bg-primary/5 border border-primary/20 max-w-xs mx-auto">
-                    <p className="text-sm font-medium">الاسم محجوز لمدة <strong className="text-primary">15 يوم</strong></p>
-                    <p className="text-xs text-muted-foreground mt-1">يجب إتمام إجراءات التأسيس قبل انتهاء مدة الحجز</p>
-                  </div>
-                  <Button onClick={goNext} size="lg" className="gap-2">التالي — إعداد العقد <ArrowLeft className="w-4 h-4" /></Button>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </div>
-      )}
-
-      {/* ═══════════════ CONTRACT ═══════════════ */}
-
-      {step === "contract" && (
-        <div className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-lg"><FileText className="w-5 h-5" /> إعداد عقد التأسيس</CardTitle>
-              <CardDescription>أدخل بيانات المؤسسين والمستشارين — {chosenLegalForm?.label}</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              <div>
-                <Label>رأس المال (ج.م)</Label>
-                <Input type="number" value={capital} onChange={e => setCapital(Number(e.target.value))} min={chosenLegalForm?.minCapital || 0} className="mt-1" />
-                {chosenLegalForm && chosenLegalForm.minCapital > 0 && capital < chosenLegalForm.minCapital && (
-                  <p className="text-destructive text-xs mt-1">الحد الأدنى: {chosenLegalForm.minCapital.toLocaleString()} ج.م</p>
-                )}
+            <CardContent className="space-y-3 text-sm">
+              <div className="grid grid-cols-2 gap-3">
+                <div><span className="text-muted-foreground">اسم الشركة:</span> <strong>{companyName}</strong></div>
+                <div><span className="text-muted-foreground">الشكل القانوني:</span> <strong>{chosenLegalForm?.label}</strong></div>
+                <div><span className="text-muted-foreground">نوع الاستثمار:</span> {chosenInvestment?.label}</div>
+                <div><span className="text-muted-foreground">رأس المال:</span> {capital.toLocaleString()} ج.م</div>
+                <div><span className="text-muted-foreground">مقدم الطلب:</span> {applicantName}</div>
+                <div><span className="text-muted-foreground">الرقم القومي:</span> {applicantNationalId}</div>
+                <div><span className="text-muted-foreground">المخرجات:</span> {outputType === "digital" ? "رقمي" : "مطبوع"}</div>
+                <div><span className="text-muted-foreground">{isJointStock ? "المساهمون" : "المؤسسون"}:</span> {isJointStock ? shareholders.length : founders.length}</div>
               </div>
               <Separator />
               <div>
-                <div className="flex items-center justify-between mb-3">
-                  <Label className="text-base font-semibold">المؤسسون</Label>
-                  <Button variant="outline" size="sm" onClick={addFounder} className="gap-1"><Plus className="w-3.5 h-3.5" /> إضافة</Button>
-                </div>
-                <div className="space-y-3">
-                  {founders.map((f, idx) => (
-                    <div key={f.id} className="p-3 rounded-lg border bg-card space-y-2">
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs font-medium text-muted-foreground">مؤسس {idx + 1}</span>
-                        {founders.length > 1 && <Button variant="ghost" size="sm" onClick={() => removeFounder(f.id)} className="h-7 w-7 p-0 text-destructive"><Trash2 className="w-3.5 h-3.5" /></Button>}
-                      </div>
-                      <div className="grid grid-cols-2 gap-2">
-                        <Input placeholder="الاسم الكامل" value={f.name} onChange={e => updateFounder(f.id, "name", e.target.value)} />
-                        <Input placeholder="الرقم القومي" value={f.nationalId} onChange={e => updateFounder(f.id, "nationalId", e.target.value)} />
-                      </div>
-                      <div className="grid grid-cols-2 gap-2">
-                        <Input type="number" placeholder="نسبة الحصة %" value={f.sharePercentage || ""} onChange={e => updateFounder(f.id, "sharePercentage", Number(e.target.value))} />
-                        <select value={f.role} onChange={e => updateFounder(f.id, "role", e.target.value as Founder["role"])}
-                          className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm">
-                          <option value="founder">مؤسس</option>
-                          <option value="manager">مدير</option>
-                          <option value="board_member">عضو مجلس إدارة</option>
-                        </select>
-                      </div>
-                    </div>
+                <p className="text-muted-foreground text-xs mb-1">الأنشطة</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {Array.from(selectedActivities).map(id => (
+                    <Badge key={id} variant="outline" className="text-xs">{getLeafLabel(eisicActivities, id)}</Badge>
                   ))}
                 </div>
               </div>
-              <Separator />
-              <div className="grid sm:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label className="font-semibold">المحاسب القانوني</Label>
-                  <Input placeholder="اسم المحاسب" value={accountant.name} onChange={e => setAccountant(p => ({ ...p, name: e.target.value }))} />
-                  <Input placeholder="رقم القيد" value={accountant.regNumber} onChange={e => setAccountant(p => ({ ...p, regNumber: e.target.value }))} />
-                </div>
-                <div className="space-y-2">
-                  <Label className="font-semibold">المستشار القانوني</Label>
-                  <Input placeholder="اسم المحامي" value={lawyer.name} onChange={e => setLawyer(p => ({ ...p, name: e.target.value }))} />
-                  <Input placeholder="رقم القيد" value={lawyer.regNumber} onChange={e => setLawyer(p => ({ ...p, regNumber: e.target.value }))} />
-                </div>
-              </div>
-              <Separator />
-              {fees && (
-                <div className="p-4 rounded-xl bg-secondary space-y-2">
-                  <p className="font-semibold text-sm">رسوم العقد</p>
-                  <div className="grid grid-cols-2 gap-2 text-xs">
-                    <span className="text-muted-foreground">رسوم أساسية</span><span>{fees.baseFee.toLocaleString()} ج.م</span>
-                    <span className="text-muted-foreground">رسم دمغة</span><span>{fees.stampFee.toLocaleString()} ج.م</span>
-                    <span className="text-muted-foreground">رسم تسجيل</span><span>{fees.registrationFee.toLocaleString()} ج.م</span>
-                  </div>
+              {isJointStock && (
+                <>
                   <Separator />
-                  <div className="flex justify-between font-bold text-sm">
-                    <span>الإجمالي</span><span className="text-primary">{fees.total.toLocaleString()} ج.م</span>
-                  </div>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="cursor-pointer" onClick={() => setContractPreview(!contractPreview)}>
-              <CardTitle className="flex items-center gap-2 text-base">
-                <Eye className="w-4 h-4" /> معاينة نموذج العقد
-                {contractPreview ? <ChevronUp className="w-4 h-4 mr-auto" /> : <ChevronDown className="w-4 h-4 mr-auto" />}
-              </CardTitle>
-            </CardHeader>
-            {contractPreview && (
-              <CardContent className="text-sm leading-7 text-muted-foreground border-t pt-4 space-y-3">
-                <p className="font-bold text-foreground text-center">عقد تأسيس {chosenLegalForm?.label}</p>
-                <p>إنه في يوم {new Date().toLocaleDateString("ar-EG")} تم الاتفاق بين كل من:</p>
-                {founders.map((f, i) => (
-                  <p key={f.id}>الطرف {i === 0 ? "الأول" : i === 1 ? "الثاني" : `${i + 1}`}: السيد/ {f.name || "___"} — رقم قومي: {f.nationalId || "___"} — حصة: {f.sharePercentage}%</p>
-                ))}
-                <p>على تأسيس شركة باسم: <strong className="text-foreground">{companyName}</strong></p>
-                <p>برأس مال قدره: <strong className="text-foreground">{capital.toLocaleString()} جنيه مصري</strong></p>
-                <p>الأنشطة: {Array.from(selectedActivities).map(id => getLeafLabel(eisicActivities, id)).join("، ")}</p>
-              </CardContent>
-            )}
-          </Card>
-
-          <Button onClick={handleSubmitContractForReview} disabled={founders.some(f => !f.name || !f.nationalId)} size="lg" className="w-full gap-2">
-            <Send className="w-4 h-4" /> إرسال العقد للجهة للمراجعة
-          </Button>
-        </div>
-      )}
-
-      {/* Step: Contract Review — watches context for admin decision */}
-      {step === "contract_review" && (
-        <div className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-lg"><ClipboardCheck className="w-5 h-5" /> مراجعة الجهة — العقد</CardTitle>
-              <CardDescription>مراجعة نموذج العقد والمستندات من قبل الجهة المختصة {estId && <Badge variant="outline" className="mr-2 text-[10px]">{estId}</Badge>}</CardDescription>
-            </CardHeader>
-            <CardContent className="py-6">
-              {(!estRequest || estRequest.stage === "contract_pending") ? (
-                <div className="text-center space-y-4">
-                  <div className="w-16 h-16 rounded-full bg-amber-100 dark:bg-amber-950 flex items-center justify-center mx-auto">
-                    <Clock className="w-8 h-8 text-amber-600" />
-                  </div>
-                  <p className="font-semibold">في انتظار مراجعة الجهة</p>
-                  <p className="text-xs text-muted-foreground">تم إرسال العقد إلى لوحة الجهة — سيتم التحديث تلقائياً عند صدور القرار</p>
-                  <div className="p-3 rounded-lg bg-secondary text-xs text-muted-foreground">
-                    💡 انتقل إلى <button onClick={() => navigate("/admin")} className="text-primary underline font-medium">لوحة الجهة</button> للموافقة أو الرفض
-                  </div>
-                </div>
-              ) : estRequest.stage === "contract_approved" ? (
-                <div className="text-center space-y-4">
-                  <div className="w-16 h-16 rounded-full bg-emerald-100 dark:bg-emerald-950 flex items-center justify-center mx-auto">
-                    <CheckCircle2 className="w-8 h-8 text-emerald-600" />
-                  </div>
-                  <p className="font-bold text-emerald-600">تمت الموافقة على العقد</p>
-                  <p className="text-xs text-muted-foreground">يمكنك الآن التوقيع الإلكتروني</p>
-                  <Button onClick={goNext} size="lg" className="gap-2">
-                    <PenTool className="w-4 h-4" /> الانتقال للتوقيع
-                  </Button>
-                </div>
-              ) : estRequest.stage === "contract_docs_requested" ? (
-                <div className="text-center space-y-4">
-                  <div className="w-16 h-16 rounded-full bg-amber-100 dark:bg-amber-950 flex items-center justify-center mx-auto">
-                    <AlertTriangle className="w-8 h-8 text-amber-600" />
-                  </div>
-                  <p className="font-bold text-amber-600">مطلوب مستندات إضافية</p>
-                  <div className="p-3 rounded-lg bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 max-w-xs mx-auto text-right">
-                    {estRequest.requestedDocs.map((doc, i) => (
-                      <p key={i} className="text-sm">• {doc}</p>
-                    ))}
-                  </div>
-                  <Button variant="outline" onClick={() => { if (estId) updateEstablishmentStage(estId, "contract_pending"); goTo("contract"); }} className="gap-2">
-                    <ArrowRight className="w-4 h-4" /> العودة لتعديل العقد
-                  </Button>
-                </div>
-              ) : estRequest.stage === "contract_rejected" ? (
-                <div className="text-center space-y-4">
-                  <div className="w-16 h-16 rounded-full bg-destructive/10 flex items-center justify-center mx-auto">
-                    <XCircle className="w-8 h-8 text-destructive" />
-                  </div>
-                  <p className="font-bold text-destructive">تم رفض العقد</p>
-                  <p className="text-xs text-muted-foreground">يمكنك تعديل البيانات وإعادة الإرسال</p>
-                  <Button variant="outline" onClick={() => { if (estId) updateEstablishmentStage(estId, "contract_pending"); goTo("contract"); }} className="gap-2">
-                    <ArrowRight className="w-4 h-4" /> تعديل العقد
-                  </Button>
-                </div>
-              ) : null}
-            </CardContent>
-          </Card>
-        </div>
-      )}
-
-      {/* Step: Contract Signing */}
-      {step === "contract_sign" && (
-        <div className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-lg"><PenTool className="w-5 h-5" /> التوقيع الإلكتروني</CardTitle>
-              <CardDescription>توقيع العقد إلكترونياً من جميع المؤسسين</CardDescription>
-            </CardHeader>
-            <CardContent className="py-6">
-              {!signed ? (
-                <div className="text-center space-y-4">
-                  <div className="space-y-2 max-w-xs mx-auto text-right">
-                    {founders.map((f, i) => (
-                      <div key={f.id} className="flex items-center gap-2 p-2 rounded-lg bg-secondary text-sm">
-                        <div className="w-6 h-6 rounded-full bg-muted flex items-center justify-center text-xs">{i + 1}</div>
-                        <span className="flex-1">{f.name || "مؤسس"}</span>
-                        <Badge variant="outline" className="text-[10px]">في الانتظار</Badge>
-                      </div>
-                    ))}
-                  </div>
-                  <Button onClick={handleSign} disabled={loading} size="lg" className="gap-2">
-                    {loading ? <><Loader2 className="w-4 h-4 animate-spin" /> جاري التوقيع الإلكتروني...</> : <><PenTool className="w-4 h-4" /> توقيع العقد</>}
-                  </Button>
-                </div>
-              ) : (
-                <div className="text-center space-y-4">
-                  <div className="w-16 h-16 rounded-full bg-emerald-100 dark:bg-emerald-950 flex items-center justify-center mx-auto">
-                    <CheckCircle2 className="w-8 h-8 text-emerald-600" />
-                  </div>
-                  <p className="font-bold text-emerald-600">تم توقيع العقد من جميع الأطراف</p>
-                  <Button onClick={goNext} size="lg" className="gap-2">التالي — التحقق والإصدار <ArrowLeft className="w-4 h-4" /></Button>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </div>
-      )}
-
-      {/* Step: Contract Verification & Issuance */}
-      {step === "contract_verify" && (
-        <div className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-lg"><ShieldCheck className="w-5 h-5" /> التحقق وإصدار عقد التأسيس</CardTitle>
-              <CardDescription>التحقق النهائي من العقد وإصدار شهادة التأسيس</CardDescription>
-            </CardHeader>
-            <CardContent className="py-6">
-              {!contractVerified ? (
-                <div className="text-center space-y-4">
-                  <div className="w-16 h-16 rounded-full bg-secondary flex items-center justify-center mx-auto">
-                    <ShieldCheck className="w-8 h-8 text-muted-foreground" />
-                  </div>
-                  <div className="text-sm text-muted-foreground space-y-1">
-                    <p>✓ مطابقة التوقيعات الإلكترونية</p>
-                    <p>✓ التحقق من صحة البيانات</p>
-                    <p>✓ تسجيل العقد في مصلحة الشركات</p>
-                    <p>✓ إصدار رقم السجل التجاري</p>
-                  </div>
-                  <Button onClick={handleVerifyContract} disabled={loading} size="lg" className="gap-2">
-                    {loading ? <><Loader2 className="w-4 h-4 animate-spin" /> جاري التحقق والإصدار...</> : <><ShieldCheck className="w-4 h-4" /> بدء التحقق</>}
-                  </Button>
-                </div>
-              ) : (
-                <div className="text-center space-y-4">
-                  <div className="w-16 h-16 rounded-full bg-emerald-100 dark:bg-emerald-950 flex items-center justify-center mx-auto">
-                    <CheckCircle2 className="w-8 h-8 text-emerald-600" />
-                  </div>
-                  <p className="font-bold text-emerald-600">تم التحقق والتسجيل بنجاح</p>
-                  {fees && (
-                    <div className="p-4 rounded-xl bg-secondary max-w-xs mx-auto space-y-2">
-                      <p className="text-sm font-semibold">رسوم الإصدار المستحقة</p>
-                      <div className="grid grid-cols-2 gap-1 text-xs">
-                        <span className="text-muted-foreground">رسوم العقد</span><span>{fees.total.toLocaleString()} ج.م</span>
-                        <span className="text-muted-foreground">رسوم حجز الاسم</span><span>100 ج.م</span>
-                        {outputType === "printed" && <><span className="text-muted-foreground">رسوم التوصيل</span><span>50 ج.م</span></>}
-                      </div>
-                      <Separator />
-                      <div className="flex justify-between font-bold text-sm">
-                        <span>الإجمالي</span>
-                        <span className="text-primary">{(fees.total + 100 + (outputType === "printed" ? 50 : 0)).toLocaleString()} ج.م</span>
-                      </div>
+                  <div className="p-3 rounded-lg bg-primary/5 border border-primary/20">
+                    <p className="text-sm font-medium text-primary">⚡ سيتم إرسال الطلب إلى 11 جهة حكومية عبر نظام Workflow متكامل</p>
+                    <div className="mt-2 text-xs text-muted-foreground space-y-1">
+                      {WORKFLOW.filter(w => w.stage !== "completed").map(w => (
+                        <p key={w.stage}>• {w.label} — {w.agency}</p>
+                      ))}
                     </div>
-                  )}
-                  <Button onClick={() => setStep("done")} size="lg" className="gap-2">
-                    <Award className="w-4 h-4" /> عرض شهادة التأسيس
-                  </Button>
-                </div>
+                  </div>
+                </>
               )}
             </CardContent>
           </Card>
+          <div className="flex gap-3">
+            <Button variant="outline" onClick={goPrev} className="gap-2"><ArrowRight className="w-4 h-4" /> السابق</Button>
+            <Button onClick={handleSubmit} size="lg" className="flex-1 gap-2">
+              <Send className="w-4 h-4" /> تقديم الطلب
+            </Button>
+          </div>
         </div>
       )}
 
-      {/* ═══════════════ DONE ═══════════════ */}
+      {/* ═══════════ DONE ═══════════ */}
+
       {step === "done" && (
-        <div className="space-y-6">
-          <Card className="border-emerald-500/30 bg-emerald-50/50 dark:bg-emerald-950/20">
-            <CardContent className="py-10 text-center space-y-6">
-              <div className="w-24 h-24 rounded-full bg-emerald-100 dark:bg-emerald-900/50 flex items-center justify-center mx-auto">
-                <Building2 className="w-12 h-12 text-emerald-600" />
+        <Card className="border-emerald-500/30 bg-emerald-50/50 dark:bg-emerald-950/20">
+          <CardContent className="py-10 text-center space-y-6">
+            <div className="w-24 h-24 rounded-full bg-emerald-100 dark:bg-emerald-900/50 flex items-center justify-center mx-auto">
+              <Building2 className="w-12 h-12 text-emerald-600" />
+            </div>
+            <div>
+              <h2 className="text-2xl font-bold mb-2">تم تقديم الطلب بنجاح!</h2>
+              <p className="text-muted-foreground text-sm">
+                {isJointStock
+                  ? "تم إرسال الطلب إلى هيئة الاستثمار — يمكنك متابعة التقدم من لوحة العميل ولوحات الجهات"
+                  : "تم إرسال الطلب — يمكنك متابعة التقدم من لوحة العميل"
+                }
+              </p>
+            </div>
+            <div className="max-w-sm mx-auto space-y-3">
+              <div className="flex justify-between text-sm p-3 rounded-lg bg-background border">
+                <span className="text-muted-foreground">اسم الشركة</span>
+                <span className="font-semibold">{companyName}</span>
               </div>
-              <div>
-                <h2 className="text-2xl font-bold mb-2">تم تأسيس الشركة بنجاح!</h2>
-                <p className="text-muted-foreground text-sm">تم إصدار شهادة التأسيس والعقد الموثق</p>
+              <div className="flex justify-between text-sm p-3 rounded-lg bg-background border">
+                <span className="text-muted-foreground">الشكل القانوني</span>
+                <span className="font-semibold">{chosenLegalForm?.label}</span>
               </div>
-              <div className="max-w-sm mx-auto space-y-3">
-                <div className="flex justify-between text-sm p-3 rounded-lg bg-background border">
-                  <span className="text-muted-foreground">اسم الشركة</span>
-                  <span className="font-semibold">{companyName}</span>
-                </div>
-                <div className="flex justify-between text-sm p-3 rounded-lg bg-background border">
-                  <span className="text-muted-foreground">رقم التسجيل</span>
-                  <span className="font-semibold font-mono">CR-{Date.now().toString(36).toUpperCase()}</span>
-                </div>
-                <div className="flex justify-between text-sm p-3 rounded-lg bg-background border">
-                  <span className="text-muted-foreground">الشكل القانوني</span>
-                  <span className="font-semibold">{chosenLegalForm?.label}</span>
-                </div>
-                <div className="flex justify-between text-sm p-3 rounded-lg bg-background border">
-                  <span className="text-muted-foreground">رأس المال</span>
-                  <span className="font-semibold">{capital.toLocaleString()} ج.م</span>
-                </div>
-                <div className="flex justify-between text-sm p-3 rounded-lg bg-background border">
-                  <span className="text-muted-foreground">مقدم الطلب</span>
-                  <span className="font-semibold">{applicantName}</span>
-                </div>
-                <div className="flex justify-between text-sm p-3 rounded-lg bg-background border">
-                  <span className="text-muted-foreground">نوع المخرجات</span>
-                  <span className="font-semibold">{outputType === "digital" ? "ملف رقمي" : "مطبوع مع التوصيل"}</span>
-                </div>
-              </div>
-              <div className="flex gap-3 justify-center pt-4">
-                <Button variant="outline" onClick={() => navigate("/services")} className="gap-2">العودة للكتالوج</Button>
-                <Button onClick={() => navigate("/dashboard")} className="gap-2">لوحة العميل <ArrowLeft className="w-4 h-4" /></Button>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
+            </div>
+            <div className="flex gap-3 justify-center pt-4">
+              <Button variant="outline" onClick={() => navigate("/services")} className="gap-2">العودة للكتالوج</Button>
+              <Button onClick={() => navigate("/dashboard")} className="gap-2">لوحة العميل <ArrowLeft className="w-4 h-4" /></Button>
+              {isJointStock && (
+                <Button variant="secondary" onClick={() => navigate("/agency/investment")} className="gap-2">
+                  <Award className="w-4 h-4" /> لوحة هيئة الاستثمار
+                </Button>
+              )}
+            </div>
+          </CardContent>
+        </Card>
       )}
     </div>
   );
